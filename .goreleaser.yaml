@@ -48,3 +48,25 @@ release:
       name_template: i
     - glob: ./install.ps1
       name_template: i.ps1
+
+brews:
+  - name: wtf
+    ids:
+      - wtf
+    homepage: "https://github.com/ParthKadam11/WTFisRunning"
+    description: "See what the fuck is actually running on your Linux server"
+    license: "MIT"
+    directory: Formula
+    install: |
+      bin.install "wtf"
+    test: |
+      assert_match "wtf", shell_output("#{bin}/wtf --help 2>&1")
+    repository:
+      owner: ParthKadam11
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    url_template: "https://github.com/ParthKadam11/WTFisRunning/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Brew formula update for wtf {{ .Tag }}"

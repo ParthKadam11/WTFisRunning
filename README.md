@@ -34,9 +34,16 @@ This is an **MVP**, not a monitoring platform. No agents, no database, no cloud,
 
 ## Install
 
-No clone. Install the binary on your laptop (same idea as installing `jq`), then run it against any Linux host you can SSH to.
+No clone. Install on your laptop, then point it at any Linux host you can SSH to.
 
-**macOS / Linux**
+**Homebrew (macOS / Linux)**
+
+```bash
+brew tap ParthKadam11/tap
+brew install wtf
+```
+
+**macOS / Linux (curl)**
 
 ```bash
 curl -fsSL https://github.com/ParthKadam11/WTFisRunning/releases/latest/download/i | sh
@@ -68,7 +75,8 @@ Same idea as SSH: install `wtf` on **your** machine, point it at a host.
 **macOS / Linux**
 
 ```bash
-curl -fsSL https://github.com/ParthKadam11/WTFisRunning/releases/latest/download/i | sh
+brew tap ParthKadam11/tap && brew install wtf
+# or: curl -fsSL https://github.com/ParthKadam11/WTFisRunning/releases/latest/download/i | sh
 ssh user@your-server
 wtf user@your-server
 ```
