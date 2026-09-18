@@ -40,7 +40,7 @@ No clone. Install on your laptop, then point it at any Linux host you can SSH to
 
 ```bash
 brew tap ParthKadam11/tap
-brew install wtf
+brew install --cask wtf
 ```
 
 **macOS / Linux (curl)**
@@ -75,7 +75,7 @@ Same idea as SSH: install `wtf` on **your** machine, point it at a host.
 **macOS / Linux**
 
 ```bash
-brew tap ParthKadam11/tap && brew install wtf
+brew tap ParthKadam11/tap && brew install --cask wtf
 # or: curl -fsSL https://github.com/ParthKadam11/WTFisRunning/releases/latest/download/i | sh
 ssh user@your-server
 wtf user@your-server

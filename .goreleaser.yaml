@@ -23,7 +23,10 @@ builds:
       - -s -w
 
 archives:
-  - formats: [tar.gz]
+  - id: default
+    ids:
+      - wtf
+    formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
@@ -49,24 +52,28 @@ release:
     - glob: ./install.ps1
       name_template: i.ps1
 
-brews:
+homebrew_casks:
   - name: wtf
     ids:
-      - wtf
+      - default
     homepage: "https://github.com/ParthKadam11/WTFisRunning"
     description: "See what the fuck is actually running on your Linux server"
-    license: "MIT"
-    directory: Formula
-    install: |
-      bin.install "wtf"
-    test: |
-      assert_match "wtf", shell_output("#{bin}/wtf --help 2>&1")
+    binaries:
+      - wtf
+    directory: Casks
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/wtf"]
+          end
     repository:
       owner: ParthKadam11
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    url_template: "https://github.com/ParthKadam11/WTFisRunning/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
-    commit_msg_template: "Brew formula update for wtf {{ .Tag }}"
+    commit_msg_template: "Brew cask update for wtf {{ .Tag }}"
+    url:
+      template: "https://github.com/ParthKadam11/WTFisRunning/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
