@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery"
-	execx "github.com/wtfisrunning/wtfisrunning/internal/exec"
-	"github.com/wtfisrunning/wtfisrunning/internal/output"
-	"github.com/wtfisrunning/wtfisrunning/internal/tui"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery"
+	execx "github.com/ParthKadam11/WTFisRunning/internal/exec"
+	"github.com/ParthKadam11/WTFisRunning/internal/output"
+	"github.com/ParthKadam11/WTFisRunning/internal/tui"
 )
 
 func main() {

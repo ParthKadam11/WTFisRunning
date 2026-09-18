@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery/system"
-	execx "github.com/wtfisrunning/wtfisrunning/internal/exec"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery/system"
+	execx "github.com/ParthKadam11/WTFisRunning/internal/exec"
 )
 
 type fakeRunner struct {

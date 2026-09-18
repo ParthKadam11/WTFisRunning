@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery/tlsinfo"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery/tlsinfo"
 )
 
 func TestParseOpenSSLX509(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery/nginx"
-	"github.com/wtfisrunning/wtfisrunning/internal/model"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery/nginx"
+	"github.com/ParthKadam11/WTFisRunning/internal/model"
 )
 
 func TestParseConfigProxyPass(t *testing.T) {

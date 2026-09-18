@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/wtfisrunning/wtfisrunning/internal/model"
+	"github.com/ParthKadam11/WTFisRunning/internal/model"
 )
 
 // BuildProjects groups containers by docker compose project labels.

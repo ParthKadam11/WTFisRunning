@@ -3,8 +3,8 @@ package docker_test
 import (
 	"testing"
 
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery/docker"
-	"github.com/wtfisrunning/wtfisrunning/internal/model"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery/docker"
+	"github.com/ParthKadam11/WTFisRunning/internal/model"
 )
 
 func TestParsePSJSON(t *testing.T) {

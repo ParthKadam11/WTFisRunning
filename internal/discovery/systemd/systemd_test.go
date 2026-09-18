@@ -3,7 +3,7 @@ package systemd_test
 import (
 	"testing"
 
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery/systemd"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery/systemd"
 )
 
 func TestParseListUnitsKeepsAppsDropsNoise(t *testing.T) {

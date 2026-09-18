@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/wtfisrunning/wtfisrunning/internal/model"
+	"github.com/ParthKadam11/WTFisRunning/internal/model"
 )
 
 // WriteJSON writes the runtime model as pretty JSON.

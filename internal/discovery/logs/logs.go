@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	execx "github.com/wtfisrunning/wtfisrunning/internal/exec"
-	"github.com/wtfisrunning/wtfisrunning/internal/model"
+	execx "github.com/ParthKadam11/WTFisRunning/internal/exec"
+	"github.com/ParthKadam11/WTFisRunning/internal/model"
 )
 
 // Fetch returns recent log lines for a service (docker or systemd).

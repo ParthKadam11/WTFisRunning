@@ -8,10 +8,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery"
-	execx "github.com/wtfisrunning/wtfisrunning/internal/exec"
-	"github.com/wtfisrunning/wtfisrunning/internal/model"
-	"github.com/wtfisrunning/wtfisrunning/internal/output"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery"
+	execx "github.com/ParthKadam11/WTFisRunning/internal/exec"
+	"github.com/ParthKadam11/WTFisRunning/internal/model"
+	"github.com/ParthKadam11/WTFisRunning/internal/output"
 )
 
 type viewState int

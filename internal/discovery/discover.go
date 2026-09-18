@@ -9,16 +9,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery/compose"
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery/docker"
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery/logs"
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery/nginx"
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery/ports"
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery/system"
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery/systemd"
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery/tlsinfo"
-	execx "github.com/wtfisrunning/wtfisrunning/internal/exec"
-	"github.com/wtfisrunning/wtfisrunning/internal/model"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery/compose"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery/docker"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery/logs"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery/nginx"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery/ports"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery/system"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery/systemd"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery/tlsinfo"
+	execx "github.com/ParthKadam11/WTFisRunning/internal/exec"
+	"github.com/ParthKadam11/WTFisRunning/internal/model"
 )
 
 // Discover runs all collectors concurrently and assembles a Runtime snapshot.

@@ -34,17 +34,25 @@ This is an **MVP**, not a monitoring platform. No agents, no database, no cloud,
 
 ## Install
 
-```bash
-go install github.com/wtfisrunning/wtfisrunning/cmd/wtfisrunning@latest
-```
+No clone. Install the binary on your laptop (same idea as installing `jq`), then run it against any host you can SSH to.
 
-Or from this repo:
+**macOS / Linux (one liner)**
 
 ```bash
-go build -o wtfisrunning ./cmd/wtfisrunning
+curl -fsSL https://raw.githubusercontent.com/ParthKadam11/WTFisRunning/master/scripts/install.sh | bash
 ```
 
-Requires Go 1.22+.
+**Go (any OS)**
+
+```bash
+go install github.com/ParthKadam11/WTFisRunning/cmd/wtfisrunning@latest
+```
+
+**Windows / manual**
+
+Download the matching archive from [Releases](https://github.com/ParthKadam11/WTFisRunning/releases/latest), put `wtfisrunning` on your PATH.
+
+Requires OpenSSH (`ssh`) on the client. Nothing is installed on the remote server.
 
 ## Usage
 
@@ -115,7 +123,7 @@ Discovery never talks to the TUI directly. Collectors speak through a small `Run
 - nginx parsing is intentionally incomplete — enough for useful topology, not a full config validator
 - Docker network membership shows co-location, not application-level dependencies
 - Impact view only uses discovered relationships (proxy_pass, networks) — it will not invent deps
-- Remote mode shells out to `ssh`; password auth is not supported
+- Remote mode shells out to `ssh` (keys or password)
 - Not a live metrics daemon — each refresh is a fresh snapshot
 
 ## Development

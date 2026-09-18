@@ -3,8 +3,8 @@ package compose_test
 import (
 	"testing"
 
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery/compose"
-	"github.com/wtfisrunning/wtfisrunning/internal/model"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery/compose"
+	"github.com/ParthKadam11/WTFisRunning/internal/model"
 )
 
 func TestBuildProjects(t *testing.T) {

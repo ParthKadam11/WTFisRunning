@@ -3,8 +3,8 @@ package ports_test
 import (
 	"testing"
 
-	"github.com/wtfisrunning/wtfisrunning/internal/discovery/ports"
-	"github.com/wtfisrunning/wtfisrunning/internal/model"
+	"github.com/ParthKadam11/WTFisRunning/internal/discovery/ports"
+	"github.com/ParthKadam11/WTFisRunning/internal/model"
 )
 
 func TestClassifyExposure(t *testing.T) {

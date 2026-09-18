@@ -1,4 +1,4 @@
-module github.com/wtfisrunning/wtfisrunning
+module github.com/ParthKadam11/WTFisRunning
 
 go 1.26.3
 
