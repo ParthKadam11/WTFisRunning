@@ -46,7 +46,22 @@ func Collect(ctx context.Context, runner execx.Runner) (model.SystemInfo, model.
 	}
 
 	info.MemUsedGB, info.MemTotalGB = memInfo(ctx, runner)
-	info.DiskPercent, info.DiskUsedGB, info.DiskTotalGB = diskInfo(ctx, runner)
+	info.Disks = diskMounts(ctx, runner)
+	if len(info.Disks) > 0 {
+		// Prefer root mount for summary fields
+		root := info.Disks[0]
+		for _, d := range info.Disks {
+			if d.Mount == "/" {
+				root = d
+				break
+			}
+		}
+		info.DiskPercent = root.Percent
+		info.DiskUsedGB = root.UsedGB
+		info.DiskTotalGB = root.TotalGB
+	} else {
+		info.DiskPercent, info.DiskUsedGB, info.DiskTotalGB = diskInfo(ctx, runner)
+	}
 	info.CPUPercent = cpuPercent(ctx, runner)
 
 	return info, model.CollectorResult{
@@ -130,39 +145,115 @@ func memInfo(ctx context.Context, runner execx.Runner) (used, total float64) {
 }
 
 func diskInfo(ctx context.Context, runner execx.Runner) (percent, usedGB, totalGB float64) {
-	res := runner.Run(ctx, "df", "-P", "-k", "/")
-	if res.Err != nil {
-		return 0, 0, 0
-	}
-	lines := strings.Split(strings.TrimSpace(res.Stdout), "\n")
-	if len(lines) < 2 {
-		return 0, 0, 0
-	}
-	fields := strings.Fields(lines[len(lines)-1])
-	// Find the Capacity field (ends with '%') — resilient to filesystem names with spaces.
-	pctIdx := -1
-	for i, f := range fields {
-		if strings.HasSuffix(f, "%") {
-			pctIdx = i
-			break
+	mounts := diskMounts(ctx, runner)
+	for _, d := range mounts {
+		if d.Mount == "/" {
+			return d.Percent, d.UsedGB, d.TotalGB
 		}
 	}
-	if pctIdx < 3 {
-		return 0, 0, 0
+	if len(mounts) > 0 {
+		return mounts[0].Percent, mounts[0].UsedGB, mounts[0].TotalGB
 	}
-	totalKB, err1 := strconv.ParseFloat(fields[pctIdx-3], 64)
-	usedKB, err2 := strconv.ParseFloat(fields[pctIdx-2], 64)
-	if err1 != nil || err2 != nil || totalKB <= 0 {
-		return 0, 0, 0
+	return 0, 0, 0
+}
+
+// diskMounts returns interesting filesystem mounts (/, /var, /home, docker, etc.).
+func diskMounts(ctx context.Context, runner execx.Runner) []model.DiskMount {
+	res := runner.Run(ctx, "df", "-P", "-k")
+	if res.Err != nil {
+		return nil
 	}
-	pct, err3 := strconv.ParseFloat(strings.TrimSuffix(fields[pctIdx], "%"), 64)
-	if err3 != nil || pct < 0 || pct > 100 {
-		pct = round1((usedKB / totalKB) * 100)
+	return ParseDF(res.Stdout)
+}
+
+// ParseDF parses `df -P -k` output into interesting mounts.
+func ParseDF(output string) []model.DiskMount {
+	interesting := map[string]bool{
+		"/": true, "/var": true, "/var/lib/docker": true, "/home": true,
+		"/tmp": true, "/boot": true, "/opt": true, "/usr": true, "/data": true,
 	}
-	if pct > 100 {
-		pct = 100
+	var out []model.DiskMount
+	seen := map[string]bool{}
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "Filesystem") {
+			continue
+		}
+		fields := strings.Fields(line)
+		pctIdx := -1
+		for i, f := range fields {
+			if strings.HasSuffix(f, "%") {
+				pctIdx = i
+				break
+			}
+		}
+		if pctIdx < 3 || pctIdx+1 >= len(fields) {
+			continue
+		}
+		mount := fields[pctIdx+1]
+		// join remaining mount path parts if any
+		if pctIdx+2 < len(fields) {
+			mount = strings.Join(fields[pctIdx+1:], " ")
+		}
+		device := fields[0]
+		if pctIdx > 3 {
+			device = strings.Join(fields[:pctIdx-3], " ")
+		}
+		// skip pseudo filesystems
+		if strings.HasPrefix(device, "tmpfs") || strings.HasPrefix(device, "devtmpfs") ||
+			strings.HasPrefix(device, "udev") || strings.HasPrefix(device, "overlay") ||
+			device == "efivarfs" {
+			continue
+		}
+		keep := interesting[mount]
+		if !keep {
+			for hint := range interesting {
+				if hint != "/" && (strings.HasPrefix(mount, hint+"/") || mount == hint) {
+					keep = true
+					break
+				}
+			}
+		}
+		// also keep high-usage mounts (>= 80%) on real devices
+		totalKB, err1 := strconv.ParseFloat(fields[pctIdx-3], 64)
+		usedKB, err2 := strconv.ParseFloat(fields[pctIdx-2], 64)
+		pct, err3 := strconv.ParseFloat(strings.TrimSuffix(fields[pctIdx], "%"), 64)
+		if err1 != nil || err2 != nil || totalKB <= 0 {
+			continue
+		}
+		if err3 != nil || pct < 0 || pct > 100 {
+			pct = round1((usedKB / totalKB) * 100)
+		}
+		if pct > 100 {
+			pct = 100
+		}
+		if !keep && pct < 80 {
+			continue
+		}
+		if seen[mount] {
+			continue
+		}
+		seen[mount] = true
+		out = append(out, model.DiskMount{
+			Mount:   mount,
+			Device:  device,
+			Percent: pct,
+			UsedGB:  round1(usedKB / 1024 / 1024),
+			TotalGB: round1(totalKB / 1024 / 1024),
+		})
 	}
-	return pct, round1(usedKB / 1024 / 1024), round1(totalKB / 1024 / 1024)
+	// Ensure / is first when present
+	sortDisks(out)
+	return out
+}
+
+func sortDisks(disks []model.DiskMount) {
+	for i := range disks {
+		if disks[i].Mount == "/" && i != 0 {
+			disks[0], disks[i] = disks[i], disks[0]
+			return
+		}
+	}
 }
 
 func cpuPercent(ctx context.Context, runner execx.Runner) float64 {

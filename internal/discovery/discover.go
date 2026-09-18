@@ -9,11 +9,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wtfisrunning/wtfisrunning/internal/discovery/compose"
 	"github.com/wtfisrunning/wtfisrunning/internal/discovery/docker"
+	"github.com/wtfisrunning/wtfisrunning/internal/discovery/logs"
 	"github.com/wtfisrunning/wtfisrunning/internal/discovery/nginx"
 	"github.com/wtfisrunning/wtfisrunning/internal/discovery/ports"
 	"github.com/wtfisrunning/wtfisrunning/internal/discovery/system"
 	"github.com/wtfisrunning/wtfisrunning/internal/discovery/systemd"
+	"github.com/wtfisrunning/wtfisrunning/internal/discovery/tlsinfo"
 	execx "github.com/wtfisrunning/wtfisrunning/internal/exec"
 	"github.com/wtfisrunning/wtfisrunning/internal/model"
 )
@@ -33,6 +36,8 @@ func Discover(ctx context.Context, runner execx.Runner) *model.Runtime {
 		sysInfo     model.SystemInfo
 		nginxResult nginx.Result
 		systemdSvcs []model.Service
+		failedUnits []model.Service
+		tlsCerts    []model.TLSCert
 	)
 
 	var wg sync.WaitGroup
@@ -88,15 +93,24 @@ func Discover(ctx context.Context, runner execx.Runner) *model.Runtime {
 	if nginxResult.Installed {
 		hints = append(hints, "nginx")
 	}
-	svcs, res := systemd.Collect(ctx, runner, hints)
+	svcs, failed, res := systemd.Collect(ctx, runner, hints)
 	systemdSvcs = svcs
+	failedUnits = failed
 	rt.Collectors["systemd"] = res
+
+	// TLS after ports known
+	certs, tlsRes := tlsinfo.Collect(ctx, runner, portList)
+	tlsCerts = certs
+	rt.Collectors["tls"] = tlsRes
 
 	rt.System = sysInfo
 	rt.Containers = containers
 	rt.Networks = networks
 	rt.Ports = portList
 	rt.Processes = procs
+	rt.TLSCerts = tlsCerts
+	rt.FailedUnits = failedUnits
+	rt.ComposeProjects = compose.BuildProjects(containers)
 
 	rt.Services = buildServices(containers, systemdSvcs, nginxResult, portList)
 	rt.Relations = buildRelations(rt, nginxResult, networks)
@@ -120,6 +134,15 @@ func Discover(ctx context.Context, runner execx.Runner) *model.Runtime {
 	if rt.Relations == nil {
 		rt.Relations = []model.Relation{}
 	}
+	if rt.TLSCerts == nil {
+		rt.TLSCerts = []model.TLSCert{}
+	}
+	if rt.ComposeProjects == nil {
+		rt.ComposeProjects = []model.ComposeProject{}
+	}
+	if rt.FailedUnits == nil {
+		rt.FailedUnits = []model.Service{}
+	}
 
 	sort.Slice(rt.Services, func(i, j int) bool {
 		return rankService(rt.Services[i]) < rankService(rt.Services[j]) ||
@@ -129,10 +152,45 @@ func Discover(ctx context.Context, runner execx.Runner) *model.Runtime {
 	return rt
 }
 
+// FetchLogs loads recent logs for a service (used by inspect view).
+func FetchLogs(ctx context.Context, runner execx.Runner, svc model.Service) []string {
+	return logs.Fetch(ctx, runner, svc)
+}
+
 func buildServices(containers []model.Container, systemdSvcs []model.Service, ngx nginx.Result, portList []model.Port) []model.Service {
 	var services []model.Service
 	seen := map[string]bool{}
 	portsClaimed := map[int]bool{}
+
+	portByNum := map[int]model.Port{}
+	for _, p := range portList {
+		if p.Protocol != "tcp" {
+			continue
+		}
+		prev, ok := portByNum[p.Port]
+		if !ok || (prev.Exposure != model.ExposurePublic && p.Exposure == model.ExposurePublic) {
+			portByNum[p.Port] = p
+		}
+	}
+
+	enrichFromPort := func(svc *model.Service) {
+		for _, pn := range svc.Ports {
+			if p, ok := portByNum[pn]; ok {
+				if svc.User == "" {
+					svc.User = p.User
+				}
+				if svc.Cmdline == "" {
+					svc.Cmdline = p.Cmdline
+				}
+				if svc.PID == 0 {
+					svc.PID = p.PID
+				}
+				if svc.Exposure == "" || (svc.Exposure != model.ExposurePublic && p.Exposure == model.ExposurePublic) {
+					svc.Exposure = p.Exposure
+				}
+			}
+		}
+	}
 
 	// Prefer containers as primary services
 	for _, c := range containers {
@@ -140,9 +198,22 @@ func buildServices(containers []model.Container, systemdSvcs []model.Service, ng
 			continue
 		}
 		ports := make([]int, 0, len(c.Ports))
+		exp := model.Exposure("")
 		for _, p := range c.Ports {
 			if p.HostPort > 0 {
 				ports = append(ports, p.HostPort)
+				switch {
+				case p.HostIP == "" || p.HostIP == "0.0.0.0" || p.HostIP == "::":
+					exp = model.ExposurePublic
+				case p.HostIP == "127.0.0.1" || p.HostIP == "::1":
+					if exp == "" {
+						exp = model.ExposureLocal
+					}
+				default:
+					if exp == "" {
+						exp = model.ExposurePrivate
+					}
+				}
 			} else if p.ContainerPort > 0 {
 				ports = append(ports, p.ContainerPort)
 			}
@@ -151,6 +222,7 @@ func buildServices(containers []model.Container, systemdSvcs []model.Service, ng
 		for _, p := range ports {
 			portsClaimed[p] = true
 		}
+		proj, csvc := compose.ServiceMeta(containers, c.Name)
 		svc := model.Service{
 			ID:          "container:" + c.Name,
 			Name:        c.Name,
@@ -161,7 +233,11 @@ func buildServices(containers []model.Container, systemdSvcs []model.Service, ng
 			ContainerID: c.ID,
 			Image:       c.Image,
 			Networks:    c.Networks,
+			Exposure:    exp,
+			ComposeProj: proj,
+			ComposeSvc:  csvc,
 		}
+		enrichFromPort(&svc)
 		services = append(services, svc)
 		seen[strings.ToLower(c.Name)] = true
 	}
@@ -178,7 +254,7 @@ func buildServices(containers []model.Container, systemdSvcs []model.Service, ng
 			for _, p := range nginxPorts {
 				portsClaimed[p] = true
 			}
-			services = append(services, model.Service{
+			svc := model.Service{
 				ID:         "nginx",
 				Name:       "nginx",
 				Kind:       "nginx",
@@ -186,7 +262,9 @@ func buildServices(containers []model.Container, systemdSvcs []model.Service, ng
 				StatusText: stText,
 				Ports:      nginxPorts,
 				Unit:       "nginx.service",
-			})
+			}
+			enrichFromPort(&svc)
+			services = append(services, svc)
 			seen["nginx"] = true
 		}
 	}
@@ -196,7 +274,6 @@ func buildServices(containers []model.Container, systemdSvcs []model.Service, ng
 		if seen[key] {
 			continue
 		}
-		// Skip docker/containerd noise if we already have containers
 		if (key == "docker" || key == "containerd") && len(containers) > 0 {
 			continue
 		}
@@ -204,6 +281,7 @@ func buildServices(containers []model.Container, systemdSvcs []model.Service, ng
 		for _, p := range s.Ports {
 			portsClaimed[p] = true
 		}
+		enrichFromPort(&s)
 		services = append(services, s)
 		seen[key] = true
 	}
@@ -219,6 +297,7 @@ func buildServices(containers []model.Container, systemdSvcs []model.Service, ng
 				if strings.EqualFold(services[i].Name, p.Process) {
 					services[i].Ports = uniqueInts(append(services[i].Ports, p.Port))
 					portsClaimed[p.Port] = true
+					enrichFromPort(&services[i])
 				}
 			}
 			continue
@@ -226,7 +305,7 @@ func buildServices(containers []model.Container, systemdSvcs []model.Service, ng
 		if !isAppProcess(p.Process) {
 			continue
 		}
-		services = append(services, model.Service{
+		svc := model.Service{
 			ID:         "process:" + p.Process,
 			Name:       p.Process,
 			Kind:       "process",
@@ -234,13 +313,16 @@ func buildServices(containers []model.Container, systemdSvcs []model.Service, ng
 			StatusText: "running",
 			Ports:      []int{p.Port},
 			PID:        p.PID,
-		})
+			User:       p.User,
+			Cmdline:    p.Cmdline,
+			Exposure:   p.Exposure,
+		}
+		services = append(services, svc)
 		seen[key] = true
 		portsClaimed[p.Port] = true
 	}
 
-	// Unnamed TCP listeners still matter (common without root / ss -p).
-	// Surface them so the UI is never empty when something is clearly listening.
+	// Unnamed TCP listeners
 	portOwners := map[int]string{}
 	for _, p := range portList {
 		if p.Protocol != "tcp" {
@@ -249,12 +331,10 @@ func buildServices(containers []model.Container, systemdSvcs []model.Service, ng
 		if portsClaimed[p.Port] || isNoisePort(p.Port) {
 			continue
 		}
-		name := fmt.Sprintf(":%d", p.Port)
-		if existing, ok := portOwners[p.Port]; ok {
-			_ = existing
+		if _, ok := portOwners[p.Port]; ok {
 			continue
 		}
-		display := name
+		display := fmt.Sprintf(":%d", p.Port)
 		if p.Process != "" {
 			display = p.Process
 		}
@@ -271,6 +351,9 @@ func buildServices(containers []model.Container, systemdSvcs []model.Service, ng
 			StatusText: "listening",
 			Ports:      []int{p.Port},
 			PID:        p.PID,
+			User:       p.User,
+			Cmdline:    p.Cmdline,
+			Exposure:   p.Exposure,
 			Detail:     p.Address,
 		})
 		seen[strings.ToLower(display)] = true
@@ -317,7 +400,7 @@ func buildRelations(rt *model.Runtime, ngx nginx.Result, networks []model.Networ
 		if raw == "" {
 			continue
 		}
-		for _, dep := range parseComposeDepends(raw) {
+		for _, dep := range compose.DependsOnList(raw) {
 			// Resolve compose service name to container name when possible
 			dest := resolveComposeService(rt, c.Labels["com.docker.compose.project"], dep)
 			add(model.Relation{

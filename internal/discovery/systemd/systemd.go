@@ -2,6 +2,7 @@ package systemd
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,14 +30,14 @@ var boringPrefixes = []string{
 	"dbus-", "snap.", "plymouth",
 }
 
-// Collect discovers relevant active systemd services.
-func Collect(ctx context.Context, runner execx.Runner, hintNames []string) ([]model.Service, model.CollectorResult) {
+// Collect discovers relevant active systemd services and failed units.
+func Collect(ctx context.Context, runner execx.Runner, hintNames []string) (running []model.Service, failed []model.Service, res model.CollectorResult) {
 	ctx, cancel := execx.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	check := runner.Run(ctx, "systemctl", "is-system-running")
 	if check.Err != nil && execx.ClassifyError(check) == "not_installed" {
-		return nil, model.CollectorResult{
+		return nil, nil, model.CollectorResult{
 			Name:    collectorName,
 			Status:  model.CollectorNotInstalled,
 			Message: "not available",
@@ -58,16 +59,60 @@ func Collect(ctx context.Context, runner execx.Runner, hintNames []string) ([]mo
 			status = model.CollectorTimeout
 			msg = "timed out"
 		}
-		return nil, model.CollectorResult{Name: collectorName, Status: status, Message: msg}
+		return nil, nil, model.CollectorResult{Name: collectorName, Status: status, Message: msg}
 	}
 
-	services := ParseListUnits(list.Stdout, hintNames)
-	return services, model.CollectorResult{
+	running = ParseListUnits(list.Stdout, hintNames)
+
+	failList := runner.Run(ctx, "systemctl", "list-units", "--type=service", "--state=failed", "--no-pager", "--no-legend", "--plain")
+	if failList.Err == nil {
+		failed = ParseFailedUnits(failList.Stdout)
+	}
+
+	msg := "available"
+	if len(failed) > 0 {
+		msg = "available, " + strconv.Itoa(len(failed)) + " failed"
+	}
+	return running, failed, model.CollectorResult{
 		Name:    collectorName,
 		Status:  model.CollectorOK,
-		Count:   len(services),
-		Message: "available",
+		Count:   len(running),
+		Message: msg,
 	}
+}
+
+// ParseFailedUnits parses failed systemd units (keep all — failures matter).
+func ParseFailedUnits(output string) []model.Service {
+	var out []model.Service
+	seen := map[string]bool{}
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 1 {
+			continue
+		}
+		unit := fields[0]
+		if !strings.HasSuffix(unit, ".service") {
+			continue
+		}
+		name := strings.TrimSuffix(unit, ".service")
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, model.Service{
+			ID:         "systemd-failed:" + name,
+			Name:       name,
+			Kind:       "systemd",
+			Status:     model.StatusFailed,
+			StatusText: "failed",
+			Unit:       unit,
+		})
+	}
+	return out
 }
 
 // ParseListUnits parses systemctl list-units and keeps non-boring / hinted services.
