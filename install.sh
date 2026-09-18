@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Install wtfisrunning to /usr/local/bin (or ~/.local/bin).
+# Install wtf to /usr/local/bin (or ~/.local/bin).
 #   curl -fsSL https://github.com/ParthKadam11/WTFisRunning/releases/latest/download/i | sh
 set -euo pipefail
 
 REPO="ParthKadam11/WTFisRunning"
-BIN="wtfisrunning"
+BIN="wtf"
 
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 arch="$(uname -m)"
@@ -49,5 +49,5 @@ fi
 install -m 755 "$tmpdir/$BIN" "$dest/$BIN"
 echo "installed: $dest/$BIN"
 echo
-echo "try:  wtfisrunning"
-echo "  or: wtfisrunning user@host"
+echo "try:  wtf"
+echo "  or: wtf user@host"

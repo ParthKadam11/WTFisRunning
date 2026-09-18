@@ -28,7 +28,7 @@
 
 SSH into a box and you get a pile of tools: `docker ps`, `ss`, `systemctl`, `nginx -T`. None of them answer the simple question: **what is actually running, and how does it connect?**
 
-`wtfisrunning` is a read-only CLI/TUI that discovers runtime state and shows it as a clean topology.
+`wtf` (`wtfisrunning`) is a read-only CLI/TUI that discovers runtime state and shows it as a clean topology.
 
 This is an **MVP**, not a monitoring platform. No agents, no database, no cloud, no Kubernetes.
 
@@ -45,12 +45,12 @@ curl -fsSL https://github.com/ParthKadam11/WTFisRunning/releases/latest/download
 **Go**
 
 ```bash
-go install github.com/ParthKadam11/WTFisRunning/cmd/wtfisrunning@latest
+go install github.com/ParthKadam11/WTFisRunning/cmd/wtf@latest
 ```
 
 **Windows**
 
-Download from [Releases](https://github.com/ParthKadam11/WTFisRunning/releases/latest) and put `wtfisrunning.exe` on PATH.
+Download from [Releases](https://github.com/ParthKadam11/WTFisRunning/releases/latest) and put `wtf.exe` on PATH.
 
 Requires OpenSSH (`ssh`) on the client. Nothing is installed on the remote server.
 
@@ -58,12 +58,12 @@ Requires OpenSSH (`ssh`) on the client. Nothing is installed on the remote serve
 
 ```bash
 # Interactive TUI (local machine)
-wtfisrunning
+wtf
 
 # Remote VPS via SSH (password or keys — password is asked once)
-wtfisrunning user@server
-wtfisrunning user@server --once
-wtfisrunning user@server --json
+wtf user@server
+wtf user@server --once
+wtf user@server --json
 ```
 
 If Docker shows **permission denied**, on the VPS:
@@ -132,7 +132,7 @@ Discovery never talks to the TUI directly. Collectors speak through a small `Run
 go test ./...
 go vet ./...
 gofmt -w .
-go run ./cmd/wtfisrunning --once
+go run ./cmd/wtf --once
 ```
 
 ## License

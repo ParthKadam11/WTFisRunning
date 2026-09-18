@@ -1,15 +1,15 @@
 version: 2
 
-project_name: wtfisrunning
+project_name: wtf
 
 before:
   hooks:
     - go mod tidy
 
 builds:
-  - id: wtfisrunning
-    main: ./cmd/wtfisrunning
-    binary: wtfisrunning
+  - id: wtf
+    main: ./cmd/wtf
+    binary: wtf
     env:
       - CGO_ENABLED=0
     goos:
