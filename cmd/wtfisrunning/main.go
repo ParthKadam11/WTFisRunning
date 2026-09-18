@@ -25,7 +25,6 @@ func main() {
 
 	fs.Usage = printHelp
 
-	// Allow: wtfisrunning user@host --once  (flags after positional)
 	args := rearrangeArgs(os.Args[1:])
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
@@ -44,7 +43,17 @@ func main() {
 
 	var runner execx.Runner = execx.NewLocal()
 	if target != "" {
-		runner = execx.NewRemote(target)
+		remote := execx.NewRemote(target)
+		runner = remote
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		err := remote.Connect(ctx)
+		cancel()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "hint: check SSH access, or try: ssh %s\n", target)
+			os.Exit(1)
+		}
+		defer remote.Close()
 	}
 
 	if *jsonOut || *once {
@@ -68,8 +77,6 @@ func main() {
 	}
 }
 
-// rearrangeArgs moves flags before positionals so both
-// `wtfisrunning --once user@host` and `wtfisrunning user@host --once` work.
 func rearrangeArgs(args []string) []string {
 	var flags, positionals []string
 	for i := 0; i < len(args); i++ {
@@ -82,7 +89,7 @@ func rearrangeArgs(args []string) []string {
 			flags = append(flags, a)
 			name := strings.TrimLeft(a, "-")
 			if eq := strings.IndexByte(name, '='); eq >= 0 {
-				continue // --host=user@h already has value
+				continue
 			}
 			if name == "host" && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
 				i++
@@ -130,6 +137,16 @@ OPTIONS
   --host TARGET   Same as positional user@host
   --help          Show this help
 
+REMOTE
+  Asks for your SSH password once (if keys aren't set up), then reuses
+  that session. Prefer SSH keys when you can.
+
+  Docker "permission denied"? On the VPS:
+    sudo usermod -aG docker $USER
+    # then log out and back in
+  Or give passwordless sudo docker:
+    sudo visudo  # add:  youruser ALL=(ALL) NOPASSWD: /usr/bin/docker
+
 KEYS (TUI)
   ↑↓ / j k    navigate
   enter       inspect service
@@ -138,8 +155,5 @@ KEYS (TUI)
   r           refresh
   esc         back
   q           quit
-
-Requires SSH key auth for remote hosts (no password prompts).
-Discovery is read-only. Missing Docker/nginx/systemd is fine.
 `)
 }

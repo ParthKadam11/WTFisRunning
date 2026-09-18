@@ -19,17 +19,23 @@ func Collect(ctx context.Context, runner execx.Runner) ([]model.Container, []mod
 	ctx, cancel := execx.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	version := runner.Run(ctx, "docker", "version", "--format", "{{.Server.Version}}")
+	useSudo := false
+	version := dockerCmd(ctx, runner, false, "version", "--format", "{{.Server.Version}}")
+	if version.Err != nil && execx.DockerPermDenied(version) {
+		// Passwordless sudo fallback (common on locked-down deploy users).
+		if alt := dockerCmd(ctx, runner, true, "version", "--format", "{{.Server.Version}}"); alt.Err == nil {
+			version = alt
+			useSudo = true
+		}
+	}
 	if version.Err != nil {
 		kind := execx.ClassifyError(version)
 		status := model.CollectorUnavailable
 		msg := "docker unavailable"
-		combined := strings.ToLower(version.Stderr + " " + version.Err.Error())
 		switch {
-		case strings.Contains(combined, "permission denied") ||
-			strings.Contains(combined, "docker.sock"):
+		case execx.DockerPermDenied(version) || kind == "permission_denied":
 			status = model.CollectorPermissionDenied
-			msg = "permission denied (add user to docker group)"
+			msg = "permission denied — run: sudo usermod -aG docker $USER"
 		case kind == "not_installed":
 			status = model.CollectorNotInstalled
 			msg = "not installed"
@@ -39,14 +45,11 @@ func Collect(ctx context.Context, runner execx.Runner) ([]model.Container, []mod
 		case kind == "timeout":
 			status = model.CollectorTimeout
 			msg = "timed out"
-		case kind == "permission_denied":
-			status = model.CollectorPermissionDenied
-			msg = "permission denied (add user to docker group)"
 		}
 		return nil, nil, model.CollectorResult{Name: collectorName, Status: status, Message: msg}
 	}
 
-	ps := runner.Run(ctx, "docker", "ps", "-a", "--format", "{{json .}}")
+	ps := dockerCmd(ctx, runner, useSudo, "ps", "-a", "--format", "{{json .}}")
 	if ps.Err != nil {
 		return nil, nil, model.CollectorResult{
 			Name:    collectorName,
@@ -70,13 +73,14 @@ func Collect(ctx context.Context, runner execx.Runner) ([]model.Container, []mod
 		for i, c := range containers {
 			ids[i] = c.ID
 		}
-		inspect := runner.Run(ctx, "docker", append([]string{"inspect"}, ids...)...)
+		inspectArgs := append([]string{"inspect"}, ids...)
+		inspect := dockerCmd(ctx, runner, useSudo, inspectArgs...)
 		if inspect.Err == nil {
 			enrichFromInspect(containers, inspect.Stdout)
 		}
 	}
 
-	networks := collectNetworks(ctx, runner, containers)
+	networks := collectNetworks(ctx, runner, useSudo, containers)
 
 	running := 0
 	for _, c := range containers {
@@ -85,12 +89,24 @@ func Collect(ctx context.Context, runner execx.Runner) ([]model.Container, []mod
 		}
 	}
 
+	msg := fmt.Sprintf("%d containers (%d running)", len(containers), running)
+	if useSudo {
+		msg += " via sudo"
+	}
+
 	return containers, networks, model.CollectorResult{
 		Name:    collectorName,
 		Status:  model.CollectorOK,
 		Count:   len(containers),
-		Message: fmt.Sprintf("%d containers (%d running)", len(containers), running),
+		Message: msg,
 	}
+}
+
+func dockerCmd(ctx context.Context, runner execx.Runner, sudo bool, args ...string) execx.Result {
+	if sudo {
+		return runner.Run(ctx, "sudo", append([]string{"-n", "docker"}, args...)...)
+	}
+	return runner.Run(ctx, "docker", args...)
 }
 
 type psLine struct {
@@ -196,8 +212,8 @@ func ParsePorts(s string) []model.PortMapping {
 	return dedupePorts(out)
 }
 
-func collectNetworks(ctx context.Context, runner execx.Runner, containers []model.Container) []model.Network {
-	res := runner.Run(ctx, "docker", "network", "ls", "--format", "{{.ID}}\t{{.Name}}\t{{.Driver}}")
+func collectNetworks(ctx context.Context, runner execx.Runner, useSudo bool, containers []model.Container) []model.Network {
+	res := dockerCmd(ctx, runner, useSudo, "network", "ls", "--format", "{{.ID}}\t{{.Name}}\t{{.Driver}}")
 	if res.Err != nil {
 		// Derive from containers
 		seen := map[string]*model.Network{}

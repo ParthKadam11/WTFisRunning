@@ -52,14 +52,20 @@ Requires Go 1.22+.
 # Interactive TUI (local machine)
 wtfisrunning
 
-# Remote VPS via your normal SSH config/keys
+# Remote VPS via SSH (password or keys — password is asked once)
 wtfisrunning user@server
 wtfisrunning user@server --once
 wtfisrunning user@server --json
-
-# Same thing with an explicit flag
-wtfisrunning --host user@server
 ```
+
+If Docker shows **permission denied**, on the VPS:
+
+```bash
+sudo usermod -aG docker $USER
+# log out and back in, then retry
+```
+
+Or allow passwordless docker via sudo (the tool will try `sudo -n docker` automatically).
 
 ### TUI keys
 
