@@ -54,38 +54,73 @@ Download from [Releases](https://github.com/ParthKadam11/WTFisRunning/releases/l
 
 Requires OpenSSH (`ssh`) on the client. Nothing is installed on the remote server.
 
-## Usage
+## How to use
+
+Same idea as SSH: install `wtf` on **your** machine, point it at a host.
+
+### Quick start
 
 ```bash
-# Interactive TUI (local machine)
-wtf
+# 1. Install (macOS / Linux)
+curl -fsSL https://github.com/ParthKadam11/WTFisRunning/releases/latest/download/i | sh
 
-# Remote VPS via SSH (password or keys — password is asked once)
-wtf user@server
-wtf user@server --once
-wtf user@server --json
+# 2. Confirm SSH works first
+ssh user@your-server
+
+# 3. Run wtf the same way
+wtf user@your-server
 ```
 
-If Docker shows **permission denied**, on the VPS:
+You’ll get an interactive TUI of services, ports, and topology. Keys/password auth both work; password is asked once if needed.
+
+### Common commands
+
+| Command | What it does |
+|---------|----------------|
+| `wtf` | Scan **this** machine (local TUI) |
+| `wtf user@host` | Scan a remote host over SSH (TUI) |
+| `wtf user@host --once` | Print a human snapshot and exit |
+| `wtf user@host --json` | Print JSON and exit (scripts/CI) |
+| `wtf --host user@host` | Same as positional `user@host` |
+| `wtf --help` | Show help |
+
+Examples:
+
+```bash
+wtf                          # local
+wtf deploy@1.2.3.4           # remote TUI
+wtf deploy@1.2.3.4 --once    # one-shot text
+wtf deploy@1.2.3.4 --json    # machine-readable
+```
+
+### TUI keys
+
+| Key | Action |
+|-----|--------|
+| `↑` `↓` / `j` `k` | Navigate services |
+| `enter` | Inspect selected service (details + recent logs) |
+| `i` | Impact view (dependents / relationships) |
+| `/` | Filter services |
+| `r` | Refresh discovery |
+| `esc` | Back / clear filter |
+| `q` | Quit |
+
+### Remote tips
+
+- Needs OpenSSH on the client (`ssh` in PATH). Nothing is installed on the server.
+- If `ssh user@host` fails, `wtf user@host` will fail too — fix SSH first.
+- Docker **permission denied** on the VPS:
 
 ```bash
 sudo usermod -aG docker $USER
 # log out and back in, then retry
 ```
 
-Or allow passwordless docker via sudo (the tool will try `sudo -n docker` automatically).
+Or passwordless sudo for docker (the tool also tries `sudo -n docker` automatically):
 
-### TUI keys
-
-| Key | Action |
-|-----|--------|
-| `↑` `↓` / `j` `k` | Navigate |
-| `enter` | Inspect service |
-| `i` | Impact view (when relationships exist) |
-| `/` | Filter services |
-| `r` | Refresh |
-| `esc` | Back |
-| `q` | Quit |
+```bash
+echo 'deployer ALL=(ALL) NOPASSWD: /usr/bin/docker' | sudo tee /etc/sudoers.d/deployer-docker
+```
 
 ## What it discovers
 
