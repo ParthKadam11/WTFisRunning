@@ -4,31 +4,29 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/ParthKadam11/WTFisRunning/internal/model"
+	"github.com/charmbracelet/lipgloss"
 )
 
-// User palette:
+// Brand palette:
 //
-//	#F24236  coral red
-//	#2E86AB  steel blue
-//	#F6F5AE  soft cream
-//	#F5F749  bright yellow
-//	#565554  warm gray
+//	#8ecae6  sky
+//	#219ebc  teal
+//	#ffb703  gold
+//	#fb8500  orange
 var (
-	cRed    = lipgloss.Color("#F24236")
-	cBlue   = lipgloss.Color("#2E86AB")
-	cCream  = lipgloss.Color("#F6F5AE")
-	cYellow = lipgloss.Color("#F5F749")
-	cGray   = lipgloss.Color("#565554")
+	cSky    = lipgloss.Color("#8ECAE6")
+	cTeal   = lipgloss.Color("#219EBC")
+	cGold   = lipgloss.Color("#FFB703")
+	cOrange = lipgloss.Color("#FB8500")
 
-	cBg       = lipgloss.Color("#1a1a19")
-	cPanel    = lipgloss.Color("#242423")
-	cFg       = cCream
-	cMuted    = cGray
-	cDim      = lipgloss.Color("#3d3d3c")
-	cSelectBg = lipgloss.Color("#2a2a28")
-	cBorder   = cGray
+	cBg       = lipgloss.Color("#0B1620")
+	cPanel    = lipgloss.Color("#122533")
+	cFg       = lipgloss.Color("#E8F4F8")
+	cMuted    = lipgloss.Color("#6B8A9A")
+	cDim      = lipgloss.Color("#1E3240")
+	cSelectBg = lipgloss.Color("#1A3544")
+	cBorder   = cTeal
 )
 
 type styles struct {
@@ -72,104 +70,104 @@ func defaultStyles() styles {
 	return styles{
 		App: lipgloss.NewStyle().Foreground(cFg),
 		TitleWTF: lipgloss.NewStyle().
-			Foreground(cRed).
+			Foreground(cOrange).
 			Bold(true),
 		TitleRest: lipgloss.NewStyle().
-			Foreground(cYellow).
+			Foreground(cGold).
 			Bold(true),
 		Subtitle: lipgloss.NewStyle().
-			Foreground(cBlue),
+			Foreground(cTeal),
 		Section: lipgloss.NewStyle().
-			Foreground(cBlue).
+			Foreground(cSky).
 			Bold(true).
 			MarginTop(1),
 		Rule: lipgloss.NewStyle().
-			Foreground(cGray),
+			Foreground(cDim),
 		Primary: lipgloss.NewStyle().
-			Foreground(cCream),
+			Foreground(cFg),
 		Secondary: lipgloss.NewStyle().
-			Foreground(cGray),
+			Foreground(cMuted),
 		Muted: lipgloss.NewStyle().
-			Foreground(cGray),
+			Foreground(cMuted),
 		Port: lipgloss.NewStyle().
-			Foreground(cYellow),
+			Foreground(cGold),
 		Selected: lipgloss.NewStyle().
-			Foreground(cCream).
+			Foreground(cFg).
 			Background(cSelectBg).
 			Bold(true),
 		Cursor: lipgloss.NewStyle().
-			Foreground(cRed).
+			Foreground(cOrange).
 			Bold(true),
 		Footer: lipgloss.NewStyle().
-			Foreground(cGray).
+			Foreground(cMuted).
 			MarginTop(1),
 		HelpKey: lipgloss.NewStyle().
-			Foreground(cRed).
+			Foreground(cOrange).
 			Bold(true),
 		HelpLabel: lipgloss.NewStyle().
-			Foreground(cGray),
+			Foreground(cMuted),
 		StatusRun: lipgloss.NewStyle().
-			Foreground(cYellow),
+			Foreground(cTeal),
 		StatusStop: lipgloss.NewStyle().
-			Foreground(cGray),
+			Foreground(cMuted),
 		StatusWarn: lipgloss.NewStyle().
-			Foreground(cYellow),
+			Foreground(cGold),
 		StatusFail: lipgloss.NewStyle().
-			Foreground(cRed),
+			Foreground(cOrange),
 		StatusUnk: lipgloss.NewStyle().
-			Foreground(cGray),
+			Foreground(cMuted),
 		Label: lipgloss.NewStyle().
-			Foreground(cBlue).
+			Foreground(cTeal).
 			Bold(true).
 			Width(14),
 		Value: lipgloss.NewStyle().
-			Foreground(cCream),
+			Foreground(cFg),
 		Loading: lipgloss.NewStyle().
-			Foreground(cBlue).
+			Foreground(cSky).
 			Italic(true),
 		Box: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(cBlue).
+			BorderForeground(cBorder).
 			Padding(0, 1),
 		ChipOK: lipgloss.NewStyle().
-			Foreground(cYellow).
+			Foreground(cTeal).
 			Background(cPanel).
 			Padding(0, 1),
 		ChipBad: lipgloss.NewStyle().
-			Foreground(cRed).
+			Foreground(cOrange).
 			Background(cPanel).
 			Padding(0, 1),
 		BadgeCtr: lipgloss.NewStyle().
 			Foreground(cBg).
-			Background(cBlue).
+			Background(cTeal).
 			Bold(true).
 			Padding(0, 1),
 		BadgeSys: lipgloss.NewStyle().
-			Foreground(cCream).
-			Background(cGray).
+			Foreground(cFg).
+			Background(cDim).
 			Bold(true).
 			Padding(0, 1),
 		BadgeNgx: lipgloss.NewStyle().
 			Foreground(cBg).
-			Background(cYellow).
+			Background(cGold).
 			Bold(true).
 			Padding(0, 1),
 		BadgeProc: lipgloss.NewStyle().
-			Foreground(cCream).
-			Background(cRed).
+			Foreground(cBg).
+			Background(cOrange).
 			Bold(true).
 			Padding(0, 1),
 		BadgePort: lipgloss.NewStyle().
 			Foreground(cBg).
-			Background(cCream).
+			Background(cSky).
 			Bold(true).
 			Padding(0, 1),
 		Tree: lipgloss.NewStyle().
-			Foreground(cGray),
+			Foreground(cMuted),
 		Arrow: lipgloss.NewStyle().
-			Foreground(cRed),
+			Foreground(cOrange),
 		MetricVal: lipgloss.NewStyle().
-			Foreground(cYellow).
+			Foreground(cGold).
 			Bold(true),
 	}
 }
@@ -265,11 +263,11 @@ func gradientRule(width int, s styles) string {
 	if width < 4 {
 		return s.Rule.Render(rule(width))
 	}
-	// red → blue → yellow
-	a := width / 3
-	b := width / 3
-	c := width - a - b
-	return lipgloss.NewStyle().Foreground(cRed).Render(strings.Repeat("─", a)) +
-		lipgloss.NewStyle().Foreground(cBlue).Render(strings.Repeat("─", b)) +
-		lipgloss.NewStyle().Foreground(cYellow).Render(strings.Repeat("─", c))
+	// sky → teal → gold → orange
+	q := width / 4
+	r := width - 3*q
+	return lipgloss.NewStyle().Foreground(cSky).Render(strings.Repeat("─", q)) +
+		lipgloss.NewStyle().Foreground(cTeal).Render(strings.Repeat("─", q)) +
+		lipgloss.NewStyle().Foreground(cGold).Render(strings.Repeat("─", q)) +
+		lipgloss.NewStyle().Foreground(cOrange).Render(strings.Repeat("─", r))
 }

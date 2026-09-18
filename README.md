@@ -8,7 +8,7 @@
 │                                                              │
 │  SERVICES                         SYSTEM                     │
 │  ─────────────────────            ──────────────────────     │
-│  › ● nginx             :80 :443   uptime     4d 12h          │
+│  ▶ ● nginx             :80 :443   uptime     4d 12h          │
 │    ● api               :4000      cpu        18%             │
 │    ● web               :3000      memory     3.2 / 8 GB      │
 │    ● redis             :6379      disk       41%             │

@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/ParthKadam11/WTFisRunning/internal/discovery"
 	execx "github.com/ParthKadam11/WTFisRunning/internal/exec"
 	"github.com/ParthKadam11/WTFisRunning/internal/model"
 	"github.com/ParthKadam11/WTFisRunning/internal/output"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type viewState int
@@ -347,8 +347,8 @@ func (m Model) renderHeader() string {
 	}
 	s := m.styles
 	title := s.TitleWTF.Render("WTF") + " " + s.TitleRest.Render("IS RUNNING?")
-	sub := s.Subtitle.Render("✦ runtime topology · " + host)
-	bar := gradientRule(min(m.width-6, 42), s)
+	sub := s.Subtitle.Render("runtime topology · " + host)
+	bar := gradientRule(min(m.width-6, 48), s)
 	return title + "\n" + sub + "\n" + bar
 }
 
@@ -478,8 +478,14 @@ func (m Model) renderServices(width int) string {
 		exp := exposureTag(svc.Exposure, s)
 		if i == m.cursor {
 			cursor := s.Cursor.Render("▶")
-			inner := fmt.Sprintf("%s %s %s  %s %s", statusGlyph(svc.Status), badge, padRight(svc.Name, nameW), formatPorts(svc.Ports), exposurePlain(svc.Exposure))
-			b.WriteString(cursor + " " + s.Selected.Render(inner))
+			rest := badge + " " + s.Selected.Render(padRight(svc.Name, nameW))
+			if formatPorts(svc.Ports) != "" {
+				rest += "  " + s.Port.Render(formatPorts(svc.Ports))
+			}
+			if exp != "" {
+				rest += "  " + exp
+			}
+			b.WriteString(cursor + " " + glyph + " " + rest)
 		} else {
 			b.WriteString("  " + glyph + " " + badge + " " + s.Primary.Render(name) + "  " + ports)
 			if exp != "" {
@@ -499,19 +505,6 @@ func exposureTag(e model.Exposure, s styles) string {
 		return s.Muted.Render("local")
 	case model.ExposurePrivate:
 		return s.Secondary.Render("lan")
-	default:
-		return ""
-	}
-}
-
-func exposurePlain(e model.Exposure) string {
-	switch e {
-	case model.ExposurePublic:
-		return "public"
-	case model.ExposureLocal:
-		return "local"
-	case model.ExposurePrivate:
-		return "lan"
 	default:
 		return ""
 	}
@@ -771,6 +764,14 @@ func (m Model) renderFooterHints(hints []string) string {
 func (m Model) renderInspect() string {
 	s := m.styles
 	var b strings.Builder
+	if m.runtime == nil {
+		b.WriteString(m.renderHeader())
+		b.WriteString("\n\n")
+		b.WriteString(s.Muted.Render("No runtime loaded yet."))
+		b.WriteString("\n\n")
+		b.WriteString(m.renderFooterHints([]string{"esc:back", "q:quit"}))
+		return b.String()
+	}
 	svc := m.runtime.ServiceByID(m.selectedID)
 	if svc == nil {
 		b.WriteString(m.renderHeader())
@@ -949,6 +950,12 @@ func (m Model) renderInspect() string {
 func (m Model) renderImpact() string {
 	s := m.styles
 	var b strings.Builder
+	if m.runtime == nil {
+		b.WriteString(s.Muted.Render("No runtime loaded yet."))
+		b.WriteString("\n\n")
+		b.WriteString(m.renderFooterHints([]string{"esc:back", "q:quit"}))
+		return b.String()
+	}
 	svc := m.runtime.ServiceByID(m.selectedID)
 	if svc == nil {
 		b.WriteString(s.Muted.Render("Service not found."))
@@ -1014,6 +1021,9 @@ func min(a, b int) int {
 
 func (m Model) outgoingFor(svc *model.Service) []model.Relation {
 	var out []model.Relation
+	if m.runtime == nil || svc == nil {
+		return out
+	}
 	for _, r := range m.runtime.Relations {
 		if r.Type == model.RelListensOn {
 			continue
@@ -1027,6 +1037,9 @@ func (m Model) outgoingFor(svc *model.Service) []model.Relation {
 
 func (m Model) incomingFor(svc *model.Service) []model.Relation {
 	var out []model.Relation
+	if m.runtime == nil || svc == nil {
+		return out
+	}
 	for _, r := range m.runtime.Relations {
 		if r.Type != model.RelProxiesTo && r.Type != model.RelDependsOn {
 			continue
@@ -1042,6 +1055,9 @@ func (m Model) incomingFor(svc *model.Service) []model.Relation {
 func (m Model) networkPeers(svc *model.Service) []string {
 	seen := map[string]bool{}
 	var out []string
+	if m.runtime == nil || svc == nil {
+		return out
+	}
 	for _, r := range m.runtime.Relations {
 		if r.Type != model.RelSameNetwork {
 			continue
