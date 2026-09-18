@@ -34,7 +34,7 @@ This is an **MVP**, not a monitoring platform. No agents, no database, no cloud,
 
 ## Install
 
-No clone. Install the binary on your laptop (same idea as installing `jq`), then run it against any host you can SSH to.
+No clone. Install the binary on your laptop (same idea as installing `jq`), then run it against any Linux host you can SSH to.
 
 **macOS / Linux**
 
@@ -42,17 +42,22 @@ No clone. Install the binary on your laptop (same idea as installing `jq`), then
 curl -fsSL https://github.com/ParthKadam11/WTFisRunning/releases/latest/download/i | sh
 ```
 
-**Go**
+**Windows (PowerShell)**
+
+```powershell
+irm https://github.com/ParthKadam11/WTFisRunning/releases/latest/download/i.ps1 | iex
+```
+
+Needs [OpenSSH Client](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse) (`ssh` on PATH). The installer puts `wtf.exe` in `%LOCALAPPDATA%\Programs\wtf` and adds it to your user PATH.
+
+**Go (any OS)**
 
 ```bash
 go install github.com/ParthKadam11/WTFisRunning/cmd/wtf@latest
 ```
 
-**Windows**
+Nothing is installed on the remote server. On Windows, prefer remote use: `wtf user@linux-host` (local discovery is Linux-oriented).
 
-Download from [Releases](https://github.com/ParthKadam11/WTFisRunning/releases/latest) and put `wtf.exe` on PATH.
-
-Requires OpenSSH (`ssh`) on the client. Nothing is installed on the remote server.
 
 ## How to use
 
@@ -60,18 +65,24 @@ Same idea as SSH: install `wtf` on **your** machine, point it at a host.
 
 ### Quick start
 
+**macOS / Linux**
+
 ```bash
-# 1. Install (macOS / Linux)
 curl -fsSL https://github.com/ParthKadam11/WTFisRunning/releases/latest/download/i | sh
-
-# 2. Confirm SSH works first
 ssh user@your-server
+wtf user@your-server
+```
 
-# 3. Run wtf the same way
+**Windows (PowerShell)**
+
+```powershell
+irm https://github.com/ParthKadam11/WTFisRunning/releases/latest/download/i.ps1 | iex
+ssh user@your-server
 wtf user@your-server
 ```
 
 You’ll get an interactive TUI of services, ports, and topology. Keys/password auth both work; password is asked once if needed.
+
 
 ### Common commands
 
@@ -109,6 +120,7 @@ wtf deploy@1.2.3.4 --json    # machine-readable
 
 - Needs OpenSSH on the client (`ssh` in PATH). Nothing is installed on the server.
 - If `ssh user@host` fails, `wtf user@host` will fail too — fix SSH first.
+- **Windows:** install via `i.ps1` above; if `ssh` is missing, enable Optional feature **OpenSSH Client**.
 - Docker **permission denied** on the VPS:
 
 ```bash

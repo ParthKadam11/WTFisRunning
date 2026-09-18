@@ -19,9 +19,6 @@ builds:
     goarch:
       - amd64
       - arm64
-    ignore:
-      - goos: windows
-        goarch: arm64
     ldflags:
       - -s -w
 
@@ -46,7 +43,8 @@ release:
   github:
     owner: ParthKadam11
     name: WTFisRunning
-  # Short install: curl -fsSL …/download/i | sh
   extra_files:
     - glob: ./install.sh
       name_template: i
+    - glob: ./install.ps1
+      name_template: i.ps1

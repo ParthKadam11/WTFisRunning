@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -54,6 +55,8 @@ func main() {
 			os.Exit(1)
 		}
 		defer remote.Close()
+	} else if runtime.GOOS == "windows" {
+		fmt.Fprintln(os.Stderr, "note: local discovery targets Linux hosts; on Windows prefer: wtf user@linux-host")
 	}
 
 	if *jsonOut || *once {
@@ -138,8 +141,12 @@ OPTIONS
   --help          Show this help
 
 REMOTE
+  Works from Windows, macOS, and Linux clients via OpenSSH.
   Prompts for SSH password once if keys aren't available.
   On Windows, OpenSSH multiplexing is skipped (unreliable there).
+
+  Windows install (PowerShell):
+    irm https://github.com/ParthKadam11/WTFisRunning/releases/latest/download/i.ps1 | iex
 
   Docker "permission denied"? On the VPS:
     sudo usermod -aG docker $USER

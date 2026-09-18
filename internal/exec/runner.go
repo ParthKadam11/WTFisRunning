@@ -84,6 +84,17 @@ func NewRemote(target string) *RemoteRunner {
 
 func (r *RemoteRunner) Host() string { return r.target }
 
+// EnsureSSH returns a clear error when the OpenSSH client is missing.
+func EnsureSSH() error {
+	if _, err := exec.LookPath("ssh"); err != nil {
+		if runtime.GOOS == "windows" {
+			return fmt.Errorf("ssh not found on PATH — install OpenSSH Client (Settings → Apps → Optional features), or run: Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0")
+		}
+		return fmt.Errorf("ssh not found on PATH — install OpenSSH (e.g. apt install openssh-client)")
+	}
+	return nil
+}
+
 func (r *RemoteRunner) sshBaseOpts() []string {
 	opts := []string{
 		"-o", "ConnectTimeout=20",
@@ -104,6 +115,10 @@ func (r *RemoteRunner) sshBaseOpts() []string {
 // Connect authenticates once. On Windows (or if mux fails), caches a password
 // for SSH_ASKPASS so later commands don't re-prompt.
 func (r *RemoteRunner) Connect(ctx context.Context) error {
+	if err := EnsureSSH(); err != nil {
+		return err
+	}
+
 	fmt.Fprintf(os.Stderr, "connecting to %s…\n", r.target)
 
 	if r.useMux {
