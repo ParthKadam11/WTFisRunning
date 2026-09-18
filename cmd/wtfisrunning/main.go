@@ -138,14 +138,14 @@ OPTIONS
   --help          Show this help
 
 REMOTE
-  Asks for your SSH password once (if keys aren't set up), then reuses
-  that session. Prefer SSH keys when you can.
+  Prompts for SSH password once if keys aren't available.
+  On Windows, OpenSSH multiplexing is skipped (unreliable there).
 
   Docker "permission denied"? On the VPS:
     sudo usermod -aG docker $USER
     # then log out and back in
-  Or give passwordless sudo docker:
-    sudo visudo  # add:  youruser ALL=(ALL) NOPASSWD: /usr/bin/docker
+  Or passwordless sudo docker:
+    echo 'deployer ALL=(ALL) NOPASSWD: /usr/bin/docker' | sudo tee /etc/sudoers.d/deployer-docker
 
 KEYS (TUI)
   ↑↓ / j k    navigate
