@@ -46,3 +46,7 @@ release:
   github:
     owner: ParthKadam11
     name: WTFisRunning
+  # Short install: curl -fsSL …/download/i | sh
+  extra_files:
+    - glob: ./install.sh
+      name_template: i

@@ -75,7 +75,7 @@ func New(runner execx.Runner) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.discoverCmd(), tea.SetWindowTitle("wtfisrunning"), tickCmd())
+	return tea.Batch(m.discoverCmd(), tea.SetWindowTitle("wtf"), tickCmd())
 }
 
 func tickCmd() tea.Cmd {

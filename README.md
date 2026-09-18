@@ -36,21 +36,21 @@ This is an **MVP**, not a monitoring platform. No agents, no database, no cloud,
 
 No clone. Install the binary on your laptop (same idea as installing `jq`), then run it against any host you can SSH to.
 
-**macOS / Linux (one liner)**
+**macOS / Linux**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ParthKadam11/WTFisRunning/master/scripts/install.sh | bash
+curl -fsSL https://github.com/ParthKadam11/WTFisRunning/releases/latest/download/i | sh
 ```
 
-**Go (any OS)**
+**Go**
 
 ```bash
 go install github.com/ParthKadam11/WTFisRunning/cmd/wtfisrunning@latest
 ```
 
-**Windows / manual**
+**Windows**
 
-Download the matching archive from [Releases](https://github.com/ParthKadam11/WTFisRunning/releases/latest), put `wtfisrunning` on your PATH.
+Download from [Releases](https://github.com/ParthKadam11/WTFisRunning/releases/latest) and put `wtfisrunning.exe` on PATH.
 
 Requires OpenSSH (`ssh`) on the client. Nothing is installed on the remote server.
 

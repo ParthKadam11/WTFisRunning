@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Install wtfisrunning to /usr/local/bin (or ~/.local/bin).
-# Usage:
-#   curl -fsSL https://raw.githubusercontent.com/ParthKadam11/WTFisRunning/master/scripts/install.sh | bash
+#   curl -fsSL https://github.com/ParthKadam11/WTFisRunning/releases/latest/download/i | sh
 set -euo pipefail
 
 REPO="ParthKadam11/WTFisRunning"
