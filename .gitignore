@@ -1,0 +1,16 @@
+# Binaries
+/wtfisrunning
+/wtfisrunning.exe
+/wtfisrunning-linux
+*.exe
+*.test
+*.out
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Local env
+.env
