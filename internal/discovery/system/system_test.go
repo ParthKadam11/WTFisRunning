@@ -39,7 +39,7 @@ func TestCollectParsesSystem(t *testing.T) {
 		"cat /proc/meminfo": {Stdout: "" +
 			"MemTotal:        8165432 kB\n" +
 			"MemAvailable:    4092716 kB\n"},
-		"df -P -k /": {Stdout: "" +
+		"df -P -k": {Stdout: "" +
 			"Filesystem     1024-blocks    Used Available Capacity Mounted on\n" +
 			"/dev/sda1        10240000 4198400   6041600      41% /\n"},
 		"cat /proc/stat": {Stdout: "cpu  100 0 100 800 0 0 0 0 0 0\n"},
@@ -69,19 +69,31 @@ func TestCollectParsesSystem(t *testing.T) {
 }
 
 func TestDiskPathWithSpaces(t *testing.T) {
-	r := &fakeRunner{responses: map[string]execx.Result{
-		"hostname":            {Stdout: "host\n"},
-		"cat /etc/os-release": {Stdout: "PRETTY_NAME=\"Test\"\n"},
-		"uname -r":            {Stdout: "1\n"},
-		"cat /proc/uptime":    {Stdout: "10.0 1.0\n"},
-		"cat /proc/meminfo":   {Stdout: "MemTotal: 1000 kB\nMemAvailable: 500 kB\n"},
-		"df -P -k /": {Stdout: "" +
-			"Filesystem           1024-blocks      Used Available Capacity Mounted on\n" +
-			"C:/Program Files/Git   392918012 381977036  10940976      98% /\n"},
-		"cat /proc/stat": {Stdout: "cpu  1 0 1 8 0 0 0\n"},
-	}}
-	info, _ := system.Collect(context.Background(), r)
-	if info.DiskPercent != 98 {
-		t.Fatalf("disk percent=%v want 98", info.DiskPercent)
+	input := "" +
+		"Filesystem           1024-blocks      Used Available Capacity Mounted on\n" +
+		"C:/Program Files/Git   392918012 381977036  10940976      98% /\n" +
+		"/dev/sda2               52428800  20971520  31457280      40% /var\n" +
+		"tmpfs                     1024000        0   1024000       0% /run\n"
+	mounts := system.ParseDF(input)
+	if len(mounts) < 1 {
+		t.Fatal("expected mounts")
+	}
+	if mounts[0].Mount != "/" || mounts[0].Percent != 98 {
+		t.Fatalf("root=%+v", mounts[0])
+	}
+	foundVar := false
+	for _, m := range mounts {
+		if m.Mount == "/var" {
+			foundVar = true
+			if m.Percent != 40 {
+				t.Errorf("/var=%+v", m)
+			}
+		}
+		if m.Mount == "/run" {
+			t.Errorf("tmpfs should be skipped")
+		}
+	}
+	if !foundVar {
+		t.Fatalf("missing /var in %+v", mounts)
 	}
 }

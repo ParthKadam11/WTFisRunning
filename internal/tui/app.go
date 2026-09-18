@@ -50,9 +50,18 @@ type Model struct {
 	filtering bool
 
 	selectedID string
+
+	logsLoading bool
+	logsForID   string
+	logsLines   []string
 }
 
 type tickMsg time.Time
+
+type logsMsg struct {
+	serviceID string
+	lines     []string
+}
 
 // New creates the TUI model.
 func New(runner execx.Runner) Model {
@@ -79,10 +88,21 @@ func (m Model) discoverCmd() tea.Cmd {
 	seq := m.discoverSeq
 	runner := m.runner
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		rt := discovery.Discover(ctx, runner)
 		return discoverMsg{runtime: rt, seq: seq}
+	}
+}
+
+func (m Model) fetchLogsCmd(svc model.Service) tea.Cmd {
+	runner := m.runner
+	id := svc.ID
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		lines := discovery.FetchLogs(ctx, runner, svc)
+		return logsMsg{serviceID: id, lines: lines}
 	}
 }
 
@@ -95,8 +115,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		m.spinFrame++
-		if m.loading {
+		if m.loading || m.logsLoading {
 			return m, tickCmd()
+		}
+		return m, nil
+
+	case logsMsg:
+		if msg.serviceID == m.selectedID {
+			m.logsLoading = false
+			m.logsForID = msg.serviceID
+			m.logsLines = msg.lines
 		}
 		return m, nil
 
@@ -163,6 +191,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.cursor >= 0 && m.cursor < len(items) {
 					m.selectedID = items[m.cursor].ID
 					m.view = viewInspect
+					m.logsLines = nil
+					m.logsForID = ""
+					m.logsLoading = true
+					return m, tea.Batch(m.fetchLogsCmd(items[m.cursor]), tickCmd())
 				}
 			}
 			return m, nil
@@ -372,6 +404,14 @@ func (m Model) renderOverview() string {
 
 	b.WriteString("\n")
 	b.WriteString(topoBlock)
+	if failed := m.renderFailed(); failed != "" {
+		b.WriteString("\n")
+		b.WriteString(failed)
+	}
+	if tls := m.renderTLS(); tls != "" {
+		b.WriteString("\n")
+		b.WriteString(tls)
+	}
 	b.WriteString("\n")
 	b.WriteString(collectorsBlock)
 
@@ -435,16 +475,46 @@ func (m Model) renderServices(width int) string {
 		badge := s.kindBadge(svc.Kind)
 		name := padRight(svc.Name, nameW)
 		ports := s.Port.Render(formatPorts(svc.Ports))
+		exp := exposureTag(svc.Exposure, s)
 		if i == m.cursor {
 			cursor := s.Cursor.Render("▶")
-			inner := fmt.Sprintf("%s %s %s  %s", statusGlyph(svc.Status), badge, padRight(svc.Name, nameW), formatPorts(svc.Ports))
+			inner := fmt.Sprintf("%s %s %s  %s %s", statusGlyph(svc.Status), badge, padRight(svc.Name, nameW), formatPorts(svc.Ports), exposurePlain(svc.Exposure))
 			b.WriteString(cursor + " " + s.Selected.Render(inner))
 		} else {
 			b.WriteString("  " + glyph + " " + badge + " " + s.Primary.Render(name) + "  " + ports)
+			if exp != "" {
+				b.WriteString("  " + exp)
+			}
 		}
 		b.WriteString("\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+func exposureTag(e model.Exposure, s styles) string {
+	switch e {
+	case model.ExposurePublic:
+		return s.StatusFail.Render("public")
+	case model.ExposureLocal:
+		return s.Muted.Render("local")
+	case model.ExposurePrivate:
+		return s.Secondary.Render("lan")
+	default:
+		return ""
+	}
+}
+
+func exposurePlain(e model.Exposure) string {
+	switch e {
+	case model.ExposurePublic:
+		return "public"
+	case model.ExposureLocal:
+		return "local"
+	case model.ExposurePrivate:
+		return "lan"
+	default:
+		return ""
+	}
 }
 
 func (m Model) renderSystem(width int) string {
@@ -464,7 +534,6 @@ func (m Model) renderSystem(width int) string {
 		{"uptime", dash(sys.Uptime)},
 		{"cpu", formatCPU(sys.CPUPercent)},
 		{"memory", formatMem(sys.MemUsedGB, sys.MemTotalGB)},
-		{"disk", formatDisk(sys.DiskPercent)},
 	}
 	if m.width >= 88 && sys.OS != "" {
 		rows = append([][2]string{{"os", truncate(sys.OS, 28)}}, rows...)
@@ -473,6 +542,93 @@ func (m Model) renderSystem(width int) string {
 		b.WriteString(fmt.Sprintf("%s  %s\n",
 			s.Secondary.Render(padRight(row[0], 8)),
 			s.MetricVal.Render(row[1]),
+		))
+	}
+	if len(sys.Disks) > 0 {
+		b.WriteString(s.Secondary.Render("disks") + "\n")
+		maxDisks := 4
+		for i, d := range sys.Disks {
+			if i >= maxDisks {
+				b.WriteString(s.Muted.Render(fmt.Sprintf("  … %d more\n", len(sys.Disks)-maxDisks)))
+				break
+			}
+			pctStyle := s.MetricVal
+			if d.Percent >= 90 {
+				pctStyle = s.StatusFail
+			} else if d.Percent >= 80 {
+				pctStyle = s.StatusWarn
+			}
+			b.WriteString(fmt.Sprintf("  %s  %s\n",
+				s.Primary.Render(padRight(truncate(d.Mount, 14), 14)),
+				pctStyle.Render(fmt.Sprintf("%3.0f%%", d.Percent)),
+			))
+		}
+	} else {
+		b.WriteString(fmt.Sprintf("%s  %s\n",
+			s.Secondary.Render(padRight("disk", 8)),
+			s.MetricVal.Render(formatDisk(sys.DiskPercent)),
+		))
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func (m Model) renderFailed() string {
+	if m.runtime == nil || len(m.runtime.FailedUnits) == 0 {
+		return ""
+	}
+	s := m.styles
+	var b strings.Builder
+	b.WriteString(s.Section.Render("◆ FAILED"))
+	b.WriteString("\n")
+	b.WriteString(gradientRule(22, s))
+	b.WriteString("\n")
+	for i, u := range m.runtime.FailedUnits {
+		if i >= 6 {
+			b.WriteString(s.Muted.Render(fmt.Sprintf("  … %d more", len(m.runtime.FailedUnits)-6)))
+			break
+		}
+		b.WriteString(s.StatusFail.Render("  ✕ "+u.Name) + "\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func (m Model) renderTLS() string {
+	if m.runtime == nil || len(m.runtime.TLSCerts) == 0 {
+		return ""
+	}
+	s := m.styles
+	var b strings.Builder
+	b.WriteString(s.Section.Render("◆ TLS"))
+	b.WriteString("\n")
+	b.WriteString(gradientRule(22, s))
+	b.WriteString("\n")
+	for _, c := range m.runtime.TLSCerts {
+		if !c.Accessible {
+			b.WriteString(fmt.Sprintf("  %s  %s\n",
+				s.Port.Render(fmt.Sprintf(":%d", c.Port)),
+				s.Muted.Render("unreachable"),
+			))
+			continue
+		}
+		expStyle := s.MetricVal
+		if c.ExpiresIn == "EXPIRED" || (len(c.ExpiresIn) > 0 && c.ExpiresIn[len(c.ExpiresIn)-1] == 'd') {
+			// parse rough days
+			var days int
+			fmt.Sscanf(c.ExpiresIn, "%d", &days)
+			if c.ExpiresIn == "EXPIRED" || days < 14 {
+				expStyle = s.StatusFail
+			} else if days < 30 {
+				expStyle = s.StatusWarn
+			}
+		}
+		cn := c.CN
+		if cn == "" && len(c.SANs) > 0 {
+			cn = c.SANs[0]
+		}
+		b.WriteString(fmt.Sprintf("  %s  %s  %s\n",
+			s.Port.Render(fmt.Sprintf(":%d", c.Port)),
+			s.Primary.Render(truncate(cn, 28)),
+			expStyle.Render(c.ExpiresIn),
 		))
 	}
 	return strings.TrimRight(b.String(), "\n")
@@ -539,7 +695,7 @@ func (m Model) renderCollectors(width int) string {
 		return ""
 	}
 	s := m.styles
-	order := []string{"docker", "ports", "nginx", "systemd"}
+	order := []string{"docker", "ports", "nginx", "systemd", "tls"}
 	parts := make([]string, 0, len(order))
 	for _, name := range order {
 		c, ok := m.runtime.Collectors[name]
@@ -628,6 +784,9 @@ func (m Model) renderInspect() string {
 	b.WriteString(s.TitleWTF.Render(strings.ToUpper(svc.Name)))
 	b.WriteString("  ")
 	b.WriteString(s.kindBadge(svc.Kind))
+	if svc.Exposure != "" {
+		b.WriteString("  " + exposureTag(svc.Exposure, s))
+	}
 	b.WriteString("\n")
 	b.WriteString(gradientRule(min(32, m.width-6), s))
 	b.WriteString("\n\n")
@@ -645,21 +804,54 @@ func (m Model) renderInspect() string {
 	stLine := s.statusStyle(svc.Status).Render(statusGlyph(svc.Status) + " " + string(svc.Status))
 	section("STATUS", "  "+stLine)
 
+	if svc.ComposeProj != "" {
+		comp := s.Primary.Render(svc.ComposeProj)
+		if svc.ComposeSvc != "" {
+			comp += " / " + s.Port.Render(svc.ComposeSvc)
+		}
+		section("COMPOSE", "  "+comp)
+	}
 	if svc.ContainerID != "" {
 		section("CONTAINER", "  "+s.Primary.Render(svc.Name)+"  "+s.Muted.Render(svc.ContainerID))
 	}
 	if svc.Image != "" {
 		section("IMAGE", "  "+s.Primary.Render(svc.Image))
 	}
-	if svc.Unit != "" && svc.Kind == "systemd" {
+	if svc.Unit != "" && (svc.Kind == "systemd" || svc.Kind == "nginx") {
 		section("UNIT", "  "+s.Primary.Render(svc.Unit))
 	}
-	if svc.PID > 0 {
-		section("PID", "  "+s.MetricVal.Render(fmt.Sprintf("%d", svc.PID)))
+	if svc.PID > 0 || svc.User != "" {
+		var parts []string
+		if svc.PID > 0 {
+			parts = append(parts, s.MetricVal.Render(fmt.Sprintf("pid %d", svc.PID)))
+		}
+		if svc.User != "" {
+			parts = append(parts, s.Primary.Render("user "+svc.User))
+		}
+		section("PROCESS", "  "+strings.Join(parts, "  ·  "))
+	}
+	if svc.Cmdline != "" {
+		section("CMDLINE", "  "+s.Muted.Render(truncate(svc.Cmdline, m.width-10)))
 	}
 	if len(svc.Ports) > 0 {
 		var lines []string
-		if svc.ContainerID != "" {
+		portDetails := m.runtime.PortsForService(svc)
+		if len(portDetails) > 0 {
+			seen := map[int]bool{}
+			for _, p := range portDetails {
+				if seen[p.Port] {
+					continue
+				}
+				seen[p.Port] = true
+				line := "  " + s.Port.Render(fmt.Sprintf(":%d", p.Port)) +
+					"  " + exposureTag(p.Exposure, s) +
+					"  " + s.Muted.Render(p.Address)
+				if p.User != "" {
+					line += "  " + s.Secondary.Render(p.User)
+				}
+				lines = append(lines, line)
+			}
+		} else if svc.ContainerID != "" {
 			for _, c := range m.runtime.Containers {
 				if c.Name == svc.Name {
 					for _, pm := range c.Ports {
@@ -686,6 +878,22 @@ func (m Model) renderInspect() string {
 		section("NETWORKS", "  "+s.Primary.Render(strings.Join(svc.Networks, ", ")))
 	}
 
+	var tlsLines []string
+	for _, c := range m.runtime.TLSCerts {
+		for _, p := range svc.Ports {
+			if c.Port == p && c.Accessible {
+				tlsLines = append(tlsLines, fmt.Sprintf("  %s  %s  %s",
+					s.Port.Render(fmt.Sprintf(":%d", c.Port)),
+					s.Primary.Render(c.CN),
+					s.MetricVal.Render(c.ExpiresIn),
+				))
+			}
+		}
+	}
+	if len(tlsLines) > 0 {
+		section("TLS", strings.Join(tlsLines, "\n"))
+	}
+
 	deps := m.outgoingFor(svc)
 	if len(deps) > 0 {
 		var lines []string
@@ -710,6 +918,24 @@ func (m Model) renderInspect() string {
 			lines = append(lines, line)
 		}
 		section("EXPOSED THROUGH", strings.Join(lines, "\n"))
+	}
+
+	if m.logsLoading {
+		section("LOGS", "  "+s.TitleWTF.Render(m.spinner())+" "+s.Loading.Render("loading…"))
+	} else if len(m.logsLines) > 0 {
+		var lines []string
+		max := 12
+		if m.height < 30 {
+			max = 6
+		}
+		for i, line := range m.logsLines {
+			if i >= max {
+				lines = append(lines, s.Muted.Render(fmt.Sprintf("  … %d more", len(m.logsLines)-max)))
+				break
+			}
+			lines = append(lines, "  "+s.Muted.Render(truncate(line, m.width-10)))
+		}
+		section("LOGS", strings.Join(lines, "\n"))
 	}
 
 	hints := []string{"esc:back", "r:refresh", "q:quit"}

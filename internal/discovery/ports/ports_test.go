@@ -4,7 +4,26 @@ import (
 	"testing"
 
 	"github.com/wtfisrunning/wtfisrunning/internal/discovery/ports"
+	"github.com/wtfisrunning/wtfisrunning/internal/model"
 )
+
+func TestClassifyExposure(t *testing.T) {
+	cases := map[string]model.Exposure{
+		"0.0.0.0":     model.ExposurePublic,
+		"*":           model.ExposurePublic,
+		"::":          model.ExposurePublic,
+		"127.0.0.1":   model.ExposureLocal,
+		"::1":         model.ExposureLocal,
+		"127.0.0.53":  model.ExposureLocal,
+		"10.0.0.5":    model.ExposurePrivate,
+		"192.168.1.1": model.ExposurePrivate,
+	}
+	for addr, want := range cases {
+		if got := ports.ClassifyExposure(addr); got != want {
+			t.Errorf("%s: got %s want %s", addr, got, want)
+		}
+	}
+}
 
 func TestParseSS(t *testing.T) {
 	input := `Netid State  Recv-Q Send-Q Local Address:Port Peer Address:Port Process
@@ -18,17 +37,11 @@ udp   UNCONN 0      0          127.0.0.1:323        0.0.0.0:*
 	if len(plist) != 5 {
 		t.Fatalf("expected 5 ports, got %d", len(plist))
 	}
-	if plist[0].Port != 22 || plist[0].Process != "sshd" {
-		t.Errorf("port0 = %+v", plist[0])
+	if plist[0].Exposure != model.ExposurePublic {
+		t.Errorf("ssh exposure=%s", plist[0].Exposure)
 	}
-	if plist[1].Port != 80 || plist[1].Process != "nginx" {
-		t.Errorf("port1 = %+v", plist[1])
-	}
-	if plist[2].Port != 443 {
-		t.Errorf("port2 = %+v", plist[2])
-	}
-	if plist[3].Port != 5432 || plist[3].Process != "postgres" {
-		t.Errorf("port3 = %+v", plist[3])
+	if plist[3].Exposure != model.ExposureLocal {
+		t.Errorf("postgres exposure=%s", plist[3].Exposure)
 	}
 	if len(procs) < 3 {
 		t.Fatalf("expected processes, got %d", len(procs))

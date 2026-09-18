@@ -30,10 +30,18 @@ func WriteOnce(w io.Writer, rt *model.Runtime) {
 	fmt.Fprintf(w, "  uptime    %s\n", dash(rt.System.Uptime))
 	fmt.Fprintf(w, "  cpu       %s\n", formatCPU(rt.System.CPUPercent))
 	fmt.Fprintf(w, "  memory    %s\n", formatMem(rt.System.MemUsedGB, rt.System.MemTotalGB))
-	fmt.Fprintf(w, "  disk      %s\n\n", formatDisk(rt.System.DiskPercent))
+	if len(rt.System.Disks) > 0 {
+		fmt.Fprintf(w, "  disks\n")
+		for _, d := range rt.System.Disks {
+			fmt.Fprintf(w, "    %-18s %5.0f%%  %.1f / %.1f GB\n", d.Mount, d.Percent, d.UsedGB, d.TotalGB)
+		}
+	} else {
+		fmt.Fprintf(w, "  disk      %s\n", formatDisk(rt.System.DiskPercent))
+	}
+	fmt.Fprintln(w)
 
 	fmt.Fprintf(w, "COLLECTORS\n")
-	order := []string{"docker", "ports", "nginx", "systemd", "system"}
+	order := []string{"docker", "ports", "nginx", "systemd", "tls", "system"}
 	for _, name := range order {
 		if c, ok := rt.Collectors[name]; ok {
 			fmt.Fprintf(w, "  %-10s %s\n", name, collectorLine(c))
@@ -41,14 +49,36 @@ func WriteOnce(w io.Writer, rt *model.Runtime) {
 	}
 	fmt.Fprintln(w)
 
+	if len(rt.FailedUnits) > 0 {
+		fmt.Fprintf(w, "FAILED UNITS\n")
+		for _, s := range rt.FailedUnits {
+			fmt.Fprintf(w, "  ✕ %s\n", s.Name)
+		}
+		fmt.Fprintln(w)
+	}
+
+	if len(rt.ComposeProjects) > 0 {
+		fmt.Fprintf(w, "COMPOSE\n")
+		for _, p := range rt.ComposeProjects {
+			fmt.Fprintf(w, "  %s  %d/%d running  [%s]\n",
+				p.Name, p.Running, p.Total, strings.Join(p.Services, ", "))
+		}
+		fmt.Fprintln(w)
+	}
+
 	if len(rt.Services) > 0 {
 		fmt.Fprintf(w, "SERVICES\n")
 		for _, s := range rt.Services {
-			fmt.Fprintf(w, "  %s %-16s %-10s %s\n",
+			exp := ""
+			if s.Exposure != "" {
+				exp = " [" + string(s.Exposure) + "]"
+			}
+			fmt.Fprintf(w, "  %s %-16s %-10s %s%s\n",
 				statusGlyph(s.Status),
 				s.Name,
 				string(s.Status),
 				formatPorts(s.Ports),
+				exp,
 			)
 		}
 		fmt.Fprintln(w)
@@ -59,6 +89,18 @@ func WriteOnce(w io.Writer, rt *model.Runtime) {
 		fmt.Fprintf(w, "RUNTIME\n")
 		for _, line := range topo {
 			fmt.Fprintf(w, "  %s\n", line)
+		}
+		fmt.Fprintln(w)
+	}
+
+	if len(rt.TLSCerts) > 0 {
+		fmt.Fprintf(w, "TLS\n")
+		for _, c := range rt.TLSCerts {
+			if !c.Accessible {
+				fmt.Fprintf(w, "  :%-5d  unreachable\n", c.Port)
+				continue
+			}
+			fmt.Fprintf(w, "  :%-5d  %s  expires %s\n", c.Port, dash(c.CN), dash(c.ExpiresIn))
 		}
 		fmt.Fprintln(w)
 	}
@@ -76,7 +118,14 @@ func WriteOnce(w io.Writer, rt *model.Runtime) {
 			if proc == "" {
 				proc = "-"
 			}
-			fmt.Fprintf(w, "  :%-5d  %-4s  %s\n", p.Port, p.Protocol, proc)
+			owner := proc
+			if p.User != "" {
+				owner = p.User + "/" + proc
+			}
+			fmt.Fprintf(w, "  :%-5d  %-6s  %-8s  %s\n", p.Port, p.Protocol, string(p.Exposure), owner)
+			if p.Cmdline != "" {
+				fmt.Fprintf(w, "           %s\n", p.Cmdline)
+			}
 		}
 		fmt.Fprintln(w)
 	}
@@ -180,7 +229,19 @@ func TopologyLines(rt *model.Runtime) []string {
 func buildTopologyLines(rt *model.Runtime) []string {
 	var lines []string
 
-	// nginx proxies
+	// Compose projects first
+	for _, p := range rt.ComposeProjects {
+		lines = append(lines, "compose:"+p.Name)
+		for i, m := range p.Containers {
+			prefix := "├──"
+			if i == len(p.Containers)-1 {
+				prefix = "└──"
+			}
+			lines = append(lines, fmt.Sprintf("%s %s", prefix, m))
+		}
+		lines = append(lines, "")
+	}
+
 	var nginxRels []model.Relation
 	for _, r := range rt.Relations {
 		if r.Type == model.RelProxiesTo && (r.Source == "nginx" || strings.HasPrefix(r.Source, "nginx")) {
@@ -203,7 +264,6 @@ func buildTopologyLines(rt *model.Runtime) []string {
 		lines = append(lines, "")
 	}
 
-	// Docker network groups
 	netMembers := map[string][]string{}
 	for _, n := range rt.Networks {
 		if n.Name == "bridge" || n.Name == "host" || n.Name == "none" {
@@ -212,6 +272,7 @@ func buildTopologyLines(rt *model.Runtime) []string {
 		if len(n.Members) < 2 {
 			continue
 		}
+		// skip if already shown via compose
 		netMembers[n.Name] = n.Members
 	}
 	for name, members := range netMembers {
@@ -226,7 +287,6 @@ func buildTopologyLines(rt *model.Runtime) []string {
 		lines = append(lines, "")
 	}
 
-	// Trim trailing blank
 	for len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
 	}

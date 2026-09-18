@@ -450,25 +450,9 @@ func buildRelations(rt *model.Runtime, ngx nginx.Result, networks []model.Networ
 	return rels
 }
 
-// parseComposeDepends parses labels like "db:service_started:false,redis:service_started:false"
-// or older "db,redis".
+// parseComposeDepends kept for tests; prefer compose.DependsOnList.
 func parseComposeDepends(raw string) []string {
-	var out []string
-	for _, part := range strings.Split(raw, ",") {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		name := part
-		if i := strings.Index(part, ":"); i >= 0 {
-			name = part[:i]
-		}
-		name = strings.TrimSpace(name)
-		if name != "" {
-			out = append(out, name)
-		}
-	}
-	return out
+	return compose.DependsOnList(raw)
 }
 
 func resolveComposeService(rt *model.Runtime, project, service string) string {

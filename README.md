@@ -83,11 +83,14 @@ Or allow passwordless docker via sudo (the tool will try `sudo -n docker` automa
 
 | Collector | What you get | If missing |
 |-----------|--------------|------------|
-| **Docker** | Containers, images, ports, networks | `unavailable` / `not installed` |
-| **Ports** | Listening TCP/UDP via `ss`, owning process when allowed | degrades gracefully |
+| **Docker** | Containers, images, ports, networks, compose projects | `unavailable` / `not installed` |
+| **Ports** | Listening TCP/UDP, owner user/cmdline, public vs local | degrades gracefully |
 | **nginx** | Running state + `proxy_pass` / upstream topology | skipped |
-| **systemd** | Relevant active services (not hundreds of OS units) | skipped |
-| **System** | Hostname, OS, uptime, CPU, memory, disk | partial |
+| **systemd** | Relevant active services + failed units | skipped |
+| **TLS** | Cert CN/expiry on :443/:8443 when reachable | skipped |
+| **System** | Hostname, OS, uptime, CPU, memory, multi-disk mounts | partial |
+
+Inspect view also loads recent **docker logs** / **journalctl** lines for the selected service.
 
 All collectors are independent. One failure never kills the scan.
 
