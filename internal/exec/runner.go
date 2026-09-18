@@ -65,10 +65,13 @@ func NewRemote(target string) *RemoteRunner {
 func (r *RemoteRunner) Host() string { return r.target }
 
 func (r *RemoteRunner) Run(ctx context.Context, name string, args ...string) Result {
-	remoteCmd := shellQuote(name, args...)
+	// Non-interactive SSH often has a minimal PATH; force a sane one and
+	// run through bash so binaries like docker/ss/systemctl resolve.
+	inner := shellQuote(name, args...)
+	remoteCmd := `export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"; ` + inner
 	cmd := exec.CommandContext(ctx, "ssh",
 		"-o", "BatchMode=yes",
-		"-o", "ConnectTimeout=10",
+		"-o", "ConnectTimeout=15",
 		"-o", "StrictHostKeyChecking=accept-new",
 		r.target,
 		remoteCmd,

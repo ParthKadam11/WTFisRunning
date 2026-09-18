@@ -395,6 +395,8 @@ func (m Model) renderServices(width int) string {
 		msg := "No services discovered."
 		if m.filter != "" {
 			msg = "No matches."
+		} else if m.runtime != nil {
+			msg = emptyServicesHint(m.runtime)
 		}
 		b.WriteString(s.Muted.Render(msg))
 		return b.String()
@@ -779,6 +781,23 @@ func collectorShort(c model.CollectorResult) string {
 	default:
 		return string(c.Status)
 	}
+}
+
+func emptyServicesHint(rt *model.Runtime) string {
+	var parts []string
+	if c, ok := rt.Collectors["docker"]; ok && c.Status != model.CollectorOK {
+		parts = append(parts, "docker: "+c.Message)
+	}
+	if c, ok := rt.Collectors["ports"]; ok && c.Status != model.CollectorOK {
+		parts = append(parts, "ports: "+c.Message)
+	}
+	if c, ok := rt.Collectors["systemd"]; ok && c.Status != model.CollectorOK {
+		parts = append(parts, "systemd: "+c.Message)
+	}
+	if len(parts) == 0 {
+		return "No services discovered."
+	}
+	return "No services yet — " + strings.Join(parts, " · ")
 }
 
 func formatCPU(v float64) string {

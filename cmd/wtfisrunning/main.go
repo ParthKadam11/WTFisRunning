@@ -25,7 +25,9 @@ func main() {
 
 	fs.Usage = printHelp
 
-	if err := fs.Parse(os.Args[1:]); err != nil {
+	// Allow: wtfisrunning user@host --once  (flags after positional)
+	args := rearrangeArgs(os.Args[1:])
+	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
 	if *help {
@@ -66,13 +68,38 @@ func main() {
 	}
 }
 
-// resolveHost accepts either a positional user@host / hostname, or --host.
+// rearrangeArgs moves flags before positionals so both
+// `wtfisrunning --once user@host` and `wtfisrunning user@host --once` work.
+func rearrangeArgs(args []string) []string {
+	var flags, positionals []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			positionals = append(positionals, args[i+1:]...)
+			break
+		}
+		if strings.HasPrefix(a, "-") {
+			flags = append(flags, a)
+			name := strings.TrimLeft(a, "-")
+			if eq := strings.IndexByte(name, '='); eq >= 0 {
+				continue // --host=user@h already has value
+			}
+			if name == "host" && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				i++
+				flags = append(flags, args[i])
+			}
+			continue
+		}
+		positionals = append(positionals, a)
+	}
+	return append(flags, positionals...)
+}
+
 func resolveHost(hostFlag string, args []string) (string, error) {
 	hostFlag = strings.TrimSpace(hostFlag)
 	var positional string
 	switch len(args) {
 	case 0:
-		// local
 	case 1:
 		positional = strings.TrimSpace(args[0])
 	default:
@@ -112,7 +139,7 @@ KEYS (TUI)
   esc         back
   q           quit
 
-Discovery is read-only. Missing Docker, nginx, or systemd is fine —
-collectors degrade gracefully and the rest still works.
+Requires SSH key auth for remote hosts (no password prompts).
+Discovery is read-only. Missing Docker/nginx/systemd is fine.
 `)
 }

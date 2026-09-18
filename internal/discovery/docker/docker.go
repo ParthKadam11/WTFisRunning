@@ -24,19 +24,24 @@ func Collect(ctx context.Context, runner execx.Runner) ([]model.Container, []mod
 		kind := execx.ClassifyError(version)
 		status := model.CollectorUnavailable
 		msg := "docker unavailable"
-		switch kind {
-		case "not_installed":
+		combined := strings.ToLower(version.Stderr + " " + version.Err.Error())
+		switch {
+		case strings.Contains(combined, "permission denied") ||
+			strings.Contains(combined, "docker.sock"):
+			status = model.CollectorPermissionDenied
+			msg = "permission denied (add user to docker group)"
+		case kind == "not_installed":
 			status = model.CollectorNotInstalled
 			msg = "not installed"
-		case "permission_denied":
-			status = model.CollectorPermissionDenied
-			msg = "permission denied"
-		case "unavailable":
+		case kind == "unavailable":
 			status = model.CollectorUnavailable
 			msg = "daemon unavailable"
-		case "timeout":
+		case kind == "timeout":
 			status = model.CollectorTimeout
 			msg = "timed out"
+		case kind == "permission_denied":
+			status = model.CollectorPermissionDenied
+			msg = "permission denied (add user to docker group)"
 		}
 		return nil, nil, model.CollectorResult{Name: collectorName, Status: status, Message: msg}
 	}

@@ -132,14 +132,12 @@ func Discover(ctx context.Context, runner execx.Runner) *model.Runtime {
 func buildServices(containers []model.Container, systemdSvcs []model.Service, ngx nginx.Result, portList []model.Port) []model.Service {
 	var services []model.Service
 	seen := map[string]bool{}
+	portsClaimed := map[int]bool{}
 
 	// Prefer containers as primary services
 	for _, c := range containers {
-		if c.Status != model.StatusRunning && c.Status != model.StatusWarning {
-			// Still include stopped containers lightly? MVP: only running + warning
-			if c.Status == model.StatusStopped {
-				continue
-			}
+		if c.Status == model.StatusStopped {
+			continue
 		}
 		ports := make([]int, 0, len(c.Ports))
 		for _, p := range c.Ports {
@@ -150,6 +148,9 @@ func buildServices(containers []model.Container, systemdSvcs []model.Service, ng
 			}
 		}
 		ports = uniqueInts(ports)
+		for _, p := range ports {
+			portsClaimed[p] = true
+		}
 		svc := model.Service{
 			ID:          "container:" + c.Name,
 			Name:        c.Name,
@@ -174,6 +175,9 @@ func buildServices(containers []model.Container, systemdSvcs []model.Service, ng
 			stText = "running"
 		}
 		if !seen["nginx"] {
+			for _, p := range nginxPorts {
+				portsClaimed[p] = true
+			}
 			services = append(services, model.Service{
 				ID:         "nginx",
 				Name:       "nginx",
@@ -197,21 +201,24 @@ func buildServices(containers []model.Container, systemdSvcs []model.Service, ng
 			continue
 		}
 		s.Ports = portsForProcess(portList, s.Name)
+		for _, p := range s.Ports {
+			portsClaimed[p] = true
+		}
 		services = append(services, s)
 		seen[key] = true
 	}
 
-	// Add notable host processes listening that aren't already covered
+	// Named listening processes
 	for _, p := range portList {
-		if p.Process == "" {
+		if p.Process == "" || p.Protocol != "tcp" {
 			continue
 		}
 		key := strings.ToLower(p.Process)
 		if seen[key] {
-			// merge port
 			for i := range services {
 				if strings.EqualFold(services[i].Name, p.Process) {
 					services[i].Ports = uniqueInts(append(services[i].Ports, p.Port))
+					portsClaimed[p.Port] = true
 				}
 			}
 			continue
@@ -229,9 +236,57 @@ func buildServices(containers []model.Container, systemdSvcs []model.Service, ng
 			PID:        p.PID,
 		})
 		seen[key] = true
+		portsClaimed[p.Port] = true
+	}
+
+	// Unnamed TCP listeners still matter (common without root / ss -p).
+	// Surface them so the UI is never empty when something is clearly listening.
+	portOwners := map[int]string{}
+	for _, p := range portList {
+		if p.Protocol != "tcp" {
+			continue
+		}
+		if portsClaimed[p.Port] || isNoisePort(p.Port) {
+			continue
+		}
+		name := fmt.Sprintf(":%d", p.Port)
+		if existing, ok := portOwners[p.Port]; ok {
+			_ = existing
+			continue
+		}
+		display := name
+		if p.Process != "" {
+			display = p.Process
+		}
+		portOwners[p.Port] = display
+		id := "port:" + strconv.Itoa(p.Port)
+		if seen[strings.ToLower(display)] {
+			continue
+		}
+		services = append(services, model.Service{
+			ID:         id,
+			Name:       display,
+			Kind:       "port",
+			Status:     model.StatusRunning,
+			StatusText: "listening",
+			Ports:      []int{p.Port},
+			PID:        p.PID,
+			Detail:     p.Address,
+		})
+		seen[strings.ToLower(display)] = true
+		portsClaimed[p.Port] = true
 	}
 
 	return services
+}
+
+func isNoisePort(port int) bool {
+	switch port {
+	case 53, 323, 111, 631, 5353, 5355:
+		return true
+	default:
+		return false
+	}
 }
 
 func buildRelations(rt *model.Runtime, ngx nginx.Result, networks []model.Network) []model.Relation {

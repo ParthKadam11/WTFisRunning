@@ -6,35 +6,38 @@ import (
 	"github.com/wtfisrunning/wtfisrunning/internal/discovery/systemd"
 )
 
-func TestParseListUnits(t *testing.T) {
+func TestParseListUnitsKeepsAppsDropsNoise(t *testing.T) {
 	input := `  nginx.service          loaded active running A high performance web server
   docker.service         loaded active running Docker Application Container Engine
   ssh.service            loaded active running OpenBSD Secure Shell server
-  unrelated-foo.service  loaded active running Something obscure
+  my-api.service         loaded active running Custom API
+  cex-worker.service     loaded active running Worker
+  systemd-resolved.service loaded active running Network Name Resolution
   cron.service           loaded active running Regular background program processing daemon
-  redis.service          loaded active running Advanced key-value store
+  user@1000.service      loaded active running User Manager for UID 1000
 `
 	svcs := systemd.ParseListUnits(input, nil)
 	names := map[string]bool{}
 	for _, s := range svcs {
 		names[s.Name] = true
 	}
-	for _, want := range []string{"nginx", "docker", "ssh", "cron", "redis"} {
+	for _, want := range []string{"nginx", "docker", "ssh", "my-api", "cex-worker"} {
 		if !names[want] {
 			t.Errorf("missing %s in %#v", want, names)
 		}
 	}
-	if names["unrelated-foo"] {
-		t.Errorf("should filter unrelated-foo")
+	for _, drop := range []string{"systemd-resolved", "cron", "user@1000"} {
+		if names[drop] {
+			t.Errorf("should filter %s", drop)
+		}
 	}
 }
 
-func TestParseListUnitsHints(t *testing.T) {
-	input := `  myapp.service  loaded active running My App
-  other.service  loaded active running Other
+func TestParseListUnitsHintsOverrideBoring(t *testing.T) {
+	input := `  cron.service  loaded active running Cron
 `
-	svcs := systemd.ParseListUnits(input, []string{"myapp"})
-	if len(svcs) != 1 || svcs[0].Name != "myapp" {
+	svcs := systemd.ParseListUnits(input, []string{"cron"})
+	if len(svcs) != 1 || svcs[0].Name != "cron" {
 		t.Fatalf("%+v", svcs)
 	}
 }

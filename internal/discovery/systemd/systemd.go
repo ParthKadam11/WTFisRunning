@@ -11,12 +11,22 @@ import (
 
 const collectorName = "systemd"
 
-// interestingHints prioritizes services related to app runtimes.
-var interestingHints = []string{
-	"nginx", "docker", "containerd", "postgres", "postgresql", "mysql", "mariadb",
-	"redis", "mongo", "rabbitmq", "caddy", "traefik", "haproxy", "apache", "httpd",
-	"node", "php", "gunicorn", "uwsgi", "supervisor", "pm2", "fail2ban",
-	"sshd", "ssh", "cron", "nftables", "ufw", "firewalld",
+// boringPrefixes / exact names are filtered out so custom app units still show.
+var boringExact = map[string]bool{
+	"dbus": true, "dbus-broker": true, "cron": true, "crond": true,
+	"rsyslog": true, "syslog": true, "systemd-journald": true,
+	"systemd-logind": true, "systemd-networkd": true, "systemd-resolved": true,
+	"systemd-timesyncd": true, "systemd-udevd": true, "systemd-userdbd": true,
+	"polkit": true, "accounts-daemon": true, "ModemManager": true,
+	"multipathd": true, "udisks2": true, "upower": true, "snapd": true,
+	"unattended-upgrades": true, "packagekit": true, "chronyd": true,
+	"chrony": true, "irqbalance": true, "NetworkManager": true,
+	"blk-availability": true, "lvm2-monitor": true,
+}
+
+var boringPrefixes = []string{
+	"systemd-", "user@", "getty@", "session-", "user-runtime-dir@",
+	"dbus-", "snap.", "plymouth",
 }
 
 // Collect discovers relevant active systemd services.
@@ -32,7 +42,6 @@ func Collect(ctx context.Context, runner execx.Runner, hintNames []string) ([]mo
 			Message: "not available",
 		}
 	}
-	// Even if degraded/offline, systemctl may work
 	list := runner.Run(ctx, "systemctl", "list-units", "--type=service", "--state=running", "--no-pager", "--no-legend", "--plain")
 	if list.Err != nil {
 		kind := execx.ClassifyError(list)
@@ -61,12 +70,9 @@ func Collect(ctx context.Context, runner execx.Runner, hintNames []string) ([]mo
 	}
 }
 
-// ParseListUnits parses systemctl list-units output and filters to relevant services.
+// ParseListUnits parses systemctl list-units and keeps non-boring / hinted services.
 func ParseListUnits(output string, hintNames []string) []model.Service {
 	hints := map[string]bool{}
-	for _, h := range interestingHints {
-		hints[h] = true
-	}
 	for _, h := range hintNames {
 		h = strings.ToLower(strings.TrimSpace(h))
 		if h != "" {
@@ -94,7 +100,7 @@ func ParseListUnits(output string, hintNames []string) []model.Service {
 		if i := strings.LastIndex(name, "@"); i >= 0 {
 			base = name[:i]
 		}
-		if !isInteresting(base, hints) {
+		if isBoring(name, base) && !hints[strings.ToLower(base)] && !hints[strings.ToLower(name)] {
 			continue
 		}
 		if seen[name] {
@@ -113,15 +119,21 @@ func ParseListUnits(output string, hintNames []string) []model.Service {
 	return out
 }
 
-func isInteresting(name string, hints map[string]bool) bool {
-	lower := strings.ToLower(name)
-	if hints[lower] {
+func isBoring(full, base string) bool {
+	lowerFull := strings.ToLower(full)
+	lowerBase := strings.ToLower(base)
+	if boringExact[base] || boringExact[lowerBase] || boringExact[full] || boringExact[lowerFull] {
 		return true
 	}
-	for h := range hints {
-		if strings.Contains(lower, h) || strings.Contains(h, lower) {
+	for _, p := range boringPrefixes {
+		pl := strings.ToLower(p)
+		if strings.HasPrefix(lowerFull, pl) || strings.HasPrefix(lowerBase, pl) {
 			return true
 		}
+	}
+	// user@UID.service
+	if lowerBase == "user" && strings.Contains(lowerFull, "@") {
+		return true
 	}
 	return false
 }
