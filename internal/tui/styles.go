@@ -8,34 +8,45 @@ import (
 	"github.com/wtfisrunning/wtfisrunning/internal/model"
 )
 
+// User palette:
+//
+//	#F24236  coral red
+//	#2E86AB  steel blue
+//	#F6F5AE  soft cream
+//	#F5F749  bright yellow
+//	#565554  warm gray
 var (
-	colorBg       = lipgloss.Color("#0c0c0e")
-	colorFg       = lipgloss.Color("#e8e6e3")
-	colorMuted    = lipgloss.Color("#6b6860")
-	colorDim      = lipgloss.Color("#3d3b38")
-	colorAccent   = lipgloss.Color("#c4b5a0")
-	colorBorder   = lipgloss.Color("#2a2826")
-	colorSelect   = lipgloss.Color("#1a1917")
-	colorSelectFg = lipgloss.Color("#f5f0e8")
-	colorHealthy  = lipgloss.Color("#7d9b76")
-	colorWarn     = lipgloss.Color("#c4a35a")
-	colorError    = lipgloss.Color("#b56a5a")
-	colorUnknown  = lipgloss.Color("#6b6860")
+	cRed    = lipgloss.Color("#F24236")
+	cBlue   = lipgloss.Color("#2E86AB")
+	cCream  = lipgloss.Color("#F6F5AE")
+	cYellow = lipgloss.Color("#F5F749")
+	cGray   = lipgloss.Color("#565554")
+
+	cBg       = lipgloss.Color("#1a1a19")
+	cPanel    = lipgloss.Color("#242423")
+	cFg       = cCream
+	cMuted    = cGray
+	cDim      = lipgloss.Color("#3d3d3c")
+	cSelectBg = lipgloss.Color("#2a2a28")
+	cBorder   = cGray
 )
 
 type styles struct {
 	App        lipgloss.Style
-	Title      lipgloss.Style
+	TitleWTF   lipgloss.Style
+	TitleRest  lipgloss.Style
 	Subtitle   lipgloss.Style
 	Section    lipgloss.Style
 	Rule       lipgloss.Style
 	Primary    lipgloss.Style
 	Secondary  lipgloss.Style
 	Muted      lipgloss.Style
+	Port       lipgloss.Style
 	Selected   lipgloss.Style
 	Cursor     lipgloss.Style
 	Footer     lipgloss.Style
-	Help       lipgloss.Style
+	HelpKey    lipgloss.Style
+	HelpLabel  lipgloss.Style
 	StatusRun  lipgloss.Style
 	StatusStop lipgloss.Style
 	StatusWarn lipgloss.Style
@@ -45,64 +56,121 @@ type styles struct {
 	Value      lipgloss.Style
 	Loading    lipgloss.Style
 	Box        lipgloss.Style
+	ChipOK     lipgloss.Style
+	ChipBad    lipgloss.Style
+	BadgeCtr   lipgloss.Style
+	BadgeSys   lipgloss.Style
+	BadgeNgx   lipgloss.Style
+	BadgeProc  lipgloss.Style
+	BadgePort  lipgloss.Style
+	Tree       lipgloss.Style
+	Arrow      lipgloss.Style
+	MetricVal  lipgloss.Style
 }
 
 func defaultStyles() styles {
 	return styles{
-		App: lipgloss.NewStyle().
-			Foreground(colorFg),
-		Title: lipgloss.NewStyle().
-			Foreground(colorAccent).
+		App: lipgloss.NewStyle().Foreground(cFg),
+		TitleWTF: lipgloss.NewStyle().
+			Foreground(cRed).
+			Bold(true),
+		TitleRest: lipgloss.NewStyle().
+			Foreground(cYellow).
 			Bold(true),
 		Subtitle: lipgloss.NewStyle().
-			Foreground(colorMuted),
+			Foreground(cBlue),
 		Section: lipgloss.NewStyle().
-			Foreground(colorMuted).
+			Foreground(cBlue).
 			Bold(true).
 			MarginTop(1),
 		Rule: lipgloss.NewStyle().
-			Foreground(colorDim),
+			Foreground(cGray),
 		Primary: lipgloss.NewStyle().
-			Foreground(colorFg),
+			Foreground(cCream),
 		Secondary: lipgloss.NewStyle().
-			Foreground(colorMuted),
+			Foreground(cGray),
 		Muted: lipgloss.NewStyle().
-			Foreground(colorMuted),
+			Foreground(cGray),
+		Port: lipgloss.NewStyle().
+			Foreground(cYellow),
 		Selected: lipgloss.NewStyle().
-			Foreground(colorSelectFg).
-			Background(colorSelect).
+			Foreground(cCream).
+			Background(cSelectBg).
 			Bold(true),
 		Cursor: lipgloss.NewStyle().
-			Foreground(colorAccent).
+			Foreground(cRed).
 			Bold(true),
 		Footer: lipgloss.NewStyle().
-			Foreground(colorMuted).
+			Foreground(cGray).
 			MarginTop(1),
-		Help: lipgloss.NewStyle().
-			Foreground(colorDim),
+		HelpKey: lipgloss.NewStyle().
+			Foreground(cRed).
+			Bold(true),
+		HelpLabel: lipgloss.NewStyle().
+			Foreground(cGray),
 		StatusRun: lipgloss.NewStyle().
-			Foreground(colorHealthy),
+			Foreground(cYellow),
 		StatusStop: lipgloss.NewStyle().
-			Foreground(colorMuted),
+			Foreground(cGray),
 		StatusWarn: lipgloss.NewStyle().
-			Foreground(colorWarn),
+			Foreground(cYellow),
 		StatusFail: lipgloss.NewStyle().
-			Foreground(colorError),
+			Foreground(cRed),
 		StatusUnk: lipgloss.NewStyle().
-			Foreground(colorUnknown),
+			Foreground(cGray),
 		Label: lipgloss.NewStyle().
-			Foreground(colorMuted).
+			Foreground(cBlue).
 			Bold(true).
 			Width(14),
 		Value: lipgloss.NewStyle().
-			Foreground(colorFg),
+			Foreground(cCream),
 		Loading: lipgloss.NewStyle().
-			Foreground(colorMuted).
+			Foreground(cBlue).
 			Italic(true),
 		Box: lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(colorBorder).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(cBlue).
 			Padding(0, 1),
+		ChipOK: lipgloss.NewStyle().
+			Foreground(cYellow).
+			Background(cPanel).
+			Padding(0, 1),
+		ChipBad: lipgloss.NewStyle().
+			Foreground(cRed).
+			Background(cPanel).
+			Padding(0, 1),
+		BadgeCtr: lipgloss.NewStyle().
+			Foreground(cBg).
+			Background(cBlue).
+			Bold(true).
+			Padding(0, 1),
+		BadgeSys: lipgloss.NewStyle().
+			Foreground(cCream).
+			Background(cGray).
+			Bold(true).
+			Padding(0, 1),
+		BadgeNgx: lipgloss.NewStyle().
+			Foreground(cBg).
+			Background(cYellow).
+			Bold(true).
+			Padding(0, 1),
+		BadgeProc: lipgloss.NewStyle().
+			Foreground(cCream).
+			Background(cRed).
+			Bold(true).
+			Padding(0, 1),
+		BadgePort: lipgloss.NewStyle().
+			Foreground(cBg).
+			Background(cCream).
+			Bold(true).
+			Padding(0, 1),
+		Tree: lipgloss.NewStyle().
+			Foreground(cGray),
+		Arrow: lipgloss.NewStyle().
+			Foreground(cRed),
+		MetricVal: lipgloss.NewStyle().
+			Foreground(cYellow).
+			Bold(true),
 	}
 }
 
@@ -133,6 +201,23 @@ func (s styles) statusStyle(st model.Status) lipgloss.Style {
 		return s.StatusFail
 	default:
 		return s.StatusUnk
+	}
+}
+
+func (s styles) kindBadge(kind string) string {
+	switch kind {
+	case "container":
+		return s.BadgeCtr.Render("ctr")
+	case "systemd":
+		return s.BadgeSys.Render("sys")
+	case "nginx":
+		return s.BadgeNgx.Render("ngx")
+	case "process":
+		return s.BadgeProc.Render("proc")
+	case "port":
+		return s.BadgePort.Render("port")
+	default:
+		return s.BadgePort.Render(kind)
 	}
 }
 
@@ -174,4 +259,17 @@ func rule(width int) string {
 		width = 1
 	}
 	return strings.Repeat("─", width)
+}
+
+func gradientRule(width int, s styles) string {
+	if width < 4 {
+		return s.Rule.Render(rule(width))
+	}
+	// red → blue → yellow
+	a := width / 3
+	b := width / 3
+	c := width - a - b
+	return lipgloss.NewStyle().Foreground(cRed).Render(strings.Repeat("─", a)) +
+		lipgloss.NewStyle().Foreground(cBlue).Render(strings.Repeat("─", b)) +
+		lipgloss.NewStyle().Foreground(cYellow).Render(strings.Repeat("─", c))
 }

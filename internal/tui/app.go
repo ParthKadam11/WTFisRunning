@@ -42,6 +42,7 @@ type Model struct {
 	refreshed   time.Time
 	discoverSeq int
 	activeSeq   int
+	spinFrame   int
 
 	view      viewState
 	cursor    int
@@ -50,6 +51,8 @@ type Model struct {
 
 	selectedID string
 }
+
+type tickMsg time.Time
 
 // New creates the TUI model.
 func New(runner execx.Runner) Model {
@@ -63,7 +66,13 @@ func New(runner execx.Runner) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.discoverCmd(), tea.SetWindowTitle("wtfisrunning"))
+	return tea.Batch(m.discoverCmd(), tea.SetWindowTitle("wtfisrunning"), tickCmd())
+}
+
+func tickCmd() tea.Cmd {
+	return tea.Tick(120*time.Millisecond, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
 }
 
 func (m Model) discoverCmd() tea.Cmd {
@@ -82,6 +91,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		return m, nil
+
+	case tickMsg:
+		m.spinFrame++
+		if m.loading {
+			return m, tickCmd()
+		}
 		return m, nil
 
 	case discoverMsg:
@@ -125,7 +141,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.loading = true
 			m.discoverSeq++
-			return m, m.discoverCmd()
+			return m, tea.Batch(m.discoverCmd(), tickCmd())
 		case "up", "k":
 			if m.view == viewOverview {
 				if m.cursor > 0 {
@@ -297,9 +313,16 @@ func (m Model) renderHeader() string {
 	if m.runtime != nil && m.runtime.System.Hostname != "" {
 		host = m.runtime.System.Hostname
 	}
-	title := m.styles.Title.Render("WTF IS RUNNING?")
-	sub := m.styles.Subtitle.Render("runtime topology · " + host)
-	return title + "\n" + sub
+	s := m.styles
+	title := s.TitleWTF.Render("WTF") + " " + s.TitleRest.Render("IS RUNNING?")
+	sub := s.Subtitle.Render("✦ runtime topology · " + host)
+	bar := gradientRule(min(m.width-6, 42), s)
+	return title + "\n" + sub + "\n" + bar
+}
+
+func (m Model) spinner() string {
+	frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	return frames[m.spinFrame%len(frames)]
 }
 
 func (m Model) renderOverview() string {
@@ -309,11 +332,12 @@ func (m Model) renderOverview() string {
 
 	if m.loading && m.runtime == nil {
 		b.WriteString("\n")
-		b.WriteString(m.styles.Loading.Render("  discovering runtime…"))
+		spin := m.styles.TitleWTF.Render(m.spinner())
+		b.WriteString("  " + spin + " " + m.styles.Loading.Render("sniffing what's running…"))
 		b.WriteString("\n\n")
 		b.WriteString(m.renderCollectorsPlaceholder())
 		b.WriteString("\n")
-		b.WriteString(m.renderFooter([]string{"q quit"}))
+		b.WriteString(m.renderFooterHints([]string{"q:quit"}))
 		return b.String()
 	}
 
@@ -353,41 +377,41 @@ func (m Model) renderOverview() string {
 
 	if m.filtering || m.filter != "" {
 		b.WriteString("\n")
-		prompt := "/"
+		prompt := m.styles.TitleWTF.Render("／")
 		if m.filtering {
-			prompt = "/" + m.filter + "▌"
+			prompt += m.styles.Primary.Render(m.filter) + m.styles.TitleWTF.Render("▌")
 		} else {
-			prompt = "filter: " + m.filter
+			prompt = m.styles.Secondary.Render("filter: ") + m.styles.Primary.Render(m.filter)
 		}
-		b.WriteString(m.styles.Secondary.Render(prompt))
+		b.WriteString(prompt)
 	}
 
 	if m.loading {
 		b.WriteString("\n")
-		b.WriteString(m.styles.Loading.Render("refreshing…"))
+		b.WriteString(m.styles.TitleWTF.Render(m.spinner()) + " " + m.styles.Loading.Render("refreshing…"))
 	}
 
 	b.WriteString("\n")
 	b.WriteString(m.renderStats())
 	b.WriteString("\n")
-	hints := []string{"↑↓ navigate", "enter inspect", "i impact", "r refresh", "/ filter", "q quit"}
+	hints := []string{"↑↓:nav", "enter:inspect", "i:impact", "r:refresh", "/:filter", "q:quit"}
 	if m.width < 70 {
 		hints = []string{"↑↓", "enter", "r", "q"}
 	}
-	b.WriteString(m.renderFooter(hints))
+	b.WriteString(m.renderFooterHints(hints))
 	return b.String()
 }
 
 func (m Model) renderServices(width int) string {
 	s := m.styles
 	var b strings.Builder
-	b.WriteString(s.Section.Render("SERVICES"))
+	b.WriteString(s.Section.Render("◆ SERVICES"))
 	b.WriteString("\n")
 	ruleW := width
 	if ruleW > 28 {
 		ruleW = 28
 	}
-	b.WriteString(s.Rule.Render(rule(ruleW)))
+	b.WriteString(gradientRule(ruleW, s))
 	b.WriteString("\n")
 
 	items := m.visibleServices()
@@ -402,22 +426,22 @@ func (m Model) renderServices(width int) string {
 		return b.String()
 	}
 
-	nameW := 16
+	nameW := 14
 	if width > 50 {
-		nameW = 20
+		nameW = 18
 	}
 	for i, svc := range items {
 		glyph := s.statusStyle(svc.Status).Render(statusGlyph(svc.Status))
+		badge := s.kindBadge(svc.Kind)
 		name := padRight(svc.Name, nameW)
-		ports := formatPorts(svc.Ports)
-		line := fmt.Sprintf("%s %s  %s", glyph, name, s.Secondary.Render(ports))
+		ports := s.Port.Render(formatPorts(svc.Ports))
 		if i == m.cursor {
-			cursor := s.Cursor.Render("›")
-			line = cursor + " " + s.Selected.Render(fmt.Sprintf("%s %s  %s", statusGlyph(svc.Status), padRight(svc.Name, nameW), ports))
+			cursor := s.Cursor.Render("▶")
+			inner := fmt.Sprintf("%s %s %s  %s", statusGlyph(svc.Status), badge, padRight(svc.Name, nameW), formatPorts(svc.Ports))
+			b.WriteString(cursor + " " + s.Selected.Render(inner))
 		} else {
-			line = "  " + line
+			b.WriteString("  " + glyph + " " + badge + " " + s.Primary.Render(name) + "  " + ports)
 		}
-		b.WriteString(line)
 		b.WriteString("\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
@@ -426,9 +450,9 @@ func (m Model) renderServices(width int) string {
 func (m Model) renderSystem(width int) string {
 	s := m.styles
 	var b strings.Builder
-	b.WriteString(s.Section.Render("SYSTEM"))
+	b.WriteString(s.Section.Render("◆ SYSTEM"))
 	b.WriteString("\n")
-	b.WriteString(s.Rule.Render(rule(22)))
+	b.WriteString(gradientRule(22, s))
 	b.WriteString("\n")
 
 	if m.runtime == nil {
@@ -448,7 +472,7 @@ func (m Model) renderSystem(width int) string {
 	for _, row := range rows {
 		b.WriteString(fmt.Sprintf("%s  %s\n",
 			s.Secondary.Render(padRight(row[0], 8)),
-			s.Primary.Render(row[1]),
+			s.MetricVal.Render(row[1]),
 		))
 	}
 	return strings.TrimRight(b.String(), "\n")
@@ -457,13 +481,13 @@ func (m Model) renderSystem(width int) string {
 func (m Model) renderTopology(width int) string {
 	s := m.styles
 	var b strings.Builder
-	b.WriteString(s.Section.Render("RUNTIME"))
+	b.WriteString(s.Section.Render("◆ RUNTIME"))
 	b.WriteString("\n")
 	rw := width
 	if rw > 50 {
 		rw = 50
 	}
-	b.WriteString(s.Rule.Render(rule(rw)))
+	b.WriteString(gradientRule(rw, s))
 	b.WriteString("\n")
 
 	if m.runtime == nil {
@@ -471,7 +495,7 @@ func (m Model) renderTopology(width int) string {
 	}
 	lines := output.TopologyLines(m.runtime)
 	if len(lines) == 0 {
-		b.WriteString(s.Muted.Render("No topology relationships discovered."))
+		b.WriteString(s.Muted.Render("No topology yet — relationships show up when nginx/compose/networks talk."))
 		return b.String()
 	}
 	maxLines := 12
@@ -483,10 +507,31 @@ func (m Model) renderTopology(width int) string {
 			b.WriteString(s.Muted.Render(fmt.Sprintf("  … %d more", len(lines)-maxLines)))
 			break
 		}
-		b.WriteString(s.Primary.Render(line))
+		colored := colorTopologyLine(line, s)
+		b.WriteString(colored)
 		b.WriteString("\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+func colorTopologyLine(line string, s styles) string {
+	if line == "" {
+		return ""
+	}
+	// Root node (no tree prefix)
+	if !strings.HasPrefix(line, "├") && !strings.HasPrefix(line, "└") && !strings.HasPrefix(line, "│") {
+		return s.TitleRest.Render(line)
+	}
+	if strings.Contains(line, "──►") {
+		parts := strings.SplitN(line, "──►", 2)
+		left := s.Tree.Render(parts[0]) + s.Arrow.Render("──►")
+		right := ""
+		if len(parts) > 1 {
+			right = s.Port.Render(parts[1])
+		}
+		return left + right
+	}
+	return s.Tree.Render(line)
 }
 
 func (m Model) renderCollectors(width int) string {
@@ -501,22 +546,25 @@ func (m Model) renderCollectors(width int) string {
 		if !ok {
 			continue
 		}
-		label := name
-		val := collectorShort(c)
-		style := s.Secondary
-		if c.Status != model.CollectorOK {
-			style = s.Muted
+		label := name + " " + collectorShort(c)
+		if c.Status == model.CollectorOK {
+			parts = append(parts, s.ChipOK.Render("✓ "+label))
+		} else {
+			parts = append(parts, s.ChipBad.Render("✗ "+label))
 		}
-		parts = append(parts, style.Render(label+"  "+val))
 	}
 	if len(parts) == 0 {
 		return ""
 	}
-	return s.Muted.Render(strings.Join(parts, "   ·   "))
+	return strings.Join(parts, " ")
 }
 
 func (m Model) renderCollectorsPlaceholder() string {
-	return m.styles.Muted.Render("  docker · ports · nginx · systemd · system")
+	s := m.styles
+	return "  " + s.ChipOK.Render("docker") + " " +
+		s.ChipOK.Render("ports") + " " +
+		s.ChipOK.Render("nginx") + " " +
+		s.ChipOK.Render("systemd")
 }
 
 func (m Model) renderStats() string {
@@ -539,18 +587,29 @@ func (m Model) renderStats() string {
 			age = d.String() + " ago"
 		}
 	}
-	left := fmt.Sprintf("%d services · %d ports · %d relationships",
-		len(m.runtime.Services), len(m.runtime.Ports), nRel)
-	right := "refreshed " + age
+	left := s.Port.Render(fmt.Sprintf("%d", len(m.runtime.Services))) + s.Muted.Render(" services · ") +
+		s.Port.Render(fmt.Sprintf("%d", len(m.runtime.Ports))) + s.Muted.Render(" ports · ") +
+		s.Port.Render(fmt.Sprintf("%d", nRel)) + s.Muted.Render(" relationships")
+	right := s.Secondary.Render("refreshed " + age)
 	gap := m.width - 8 - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 2 {
-		return s.Muted.Render(left)
+		return left
 	}
-	return s.Muted.Render(left + strings.Repeat(" ", gap) + right)
+	return left + strings.Repeat(" ", gap) + right
 }
 
-func (m Model) renderFooter(hints []string) string {
-	return m.styles.Help.Render(strings.Join(hints, "   "))
+func (m Model) renderFooterHints(hints []string) string {
+	s := m.styles
+	parts := make([]string, 0, len(hints))
+	for _, h := range hints {
+		key, label, ok := strings.Cut(h, ":")
+		if !ok {
+			parts = append(parts, s.HelpKey.Render(h))
+			continue
+		}
+		parts = append(parts, s.HelpKey.Render(key)+s.HelpLabel.Render(" "+label))
+	}
+	return strings.Join(parts, s.Muted.Render("  ·  "))
 }
 
 func (m Model) renderInspect() string {
@@ -562,20 +621,22 @@ func (m Model) renderInspect() string {
 		b.WriteString("\n\n")
 		b.WriteString(s.Muted.Render("Service not found."))
 		b.WriteString("\n\n")
-		b.WriteString(m.renderFooter([]string{"esc back"}))
+		b.WriteString(m.renderFooterHints([]string{"esc:back"}))
 		return b.String()
 	}
 
-	b.WriteString(s.Title.Render(strings.ToUpper(svc.Name)))
+	b.WriteString(s.TitleWTF.Render(strings.ToUpper(svc.Name)))
+	b.WriteString("  ")
+	b.WriteString(s.kindBadge(svc.Kind))
 	b.WriteString("\n")
-	b.WriteString(s.Subtitle.Render(svc.Kind))
+	b.WriteString(gradientRule(min(32, m.width-6), s))
 	b.WriteString("\n\n")
 
 	section := func(title, body string) {
 		if body == "" {
 			return
 		}
-		b.WriteString(s.Section.MarginTop(0).Render(title))
+		b.WriteString(s.Section.MarginTop(0).Render("◆ " + title))
 		b.WriteString("\n")
 		b.WriteString(body)
 		b.WriteString("\n\n")
@@ -594,7 +655,7 @@ func (m Model) renderInspect() string {
 		section("UNIT", "  "+s.Primary.Render(svc.Unit))
 	}
 	if svc.PID > 0 {
-		section("PID", "  "+s.Primary.Render(fmt.Sprintf("%d", svc.PID)))
+		section("PID", "  "+s.MetricVal.Render(fmt.Sprintf("%d", svc.PID)))
 	}
 	if len(svc.Ports) > 0 {
 		var lines []string
@@ -603,9 +664,11 @@ func (m Model) renderInspect() string {
 				if c.Name == svc.Name {
 					for _, pm := range c.Ports {
 						if pm.HostPort > 0 {
-							lines = append(lines, fmt.Sprintf("  %d → %d/%s", pm.HostPort, pm.ContainerPort, pm.Protocol))
+							lines = append(lines, "  "+s.Port.Render(fmt.Sprintf("%d", pm.HostPort))+
+								s.Arrow.Render(" → ")+
+								s.Primary.Render(fmt.Sprintf("%d/%s", pm.ContainerPort, pm.Protocol)))
 						} else {
-							lines = append(lines, fmt.Sprintf("  %d/%s", pm.ContainerPort, pm.Protocol))
+							lines = append(lines, "  "+s.Port.Render(fmt.Sprintf("%d/%s", pm.ContainerPort, pm.Protocol)))
 						}
 					}
 					break
@@ -614,13 +677,13 @@ func (m Model) renderInspect() string {
 		}
 		if len(lines) == 0 {
 			for _, p := range svc.Ports {
-				lines = append(lines, fmt.Sprintf("  :%d", p))
+				lines = append(lines, "  "+s.Port.Render(fmt.Sprintf(":%d", p)))
 			}
 		}
 		section("PORTS", strings.Join(lines, "\n"))
 	}
 	if len(svc.Networks) > 0 {
-		section("NETWORKS", "  "+strings.Join(svc.Networks, ", "))
+		section("NETWORKS", "  "+s.Primary.Render(strings.Join(svc.Networks, ", ")))
 	}
 
 	deps := m.outgoingFor(svc)
@@ -631,7 +694,7 @@ func (m Model) renderInspect() string {
 			if r.Label != "" && r.Type == model.RelSameNetwork {
 				label = r.Destination + "  " + s.Muted.Render("("+r.Label+")")
 			}
-			lines = append(lines, "  → "+label)
+			lines = append(lines, "  "+s.Arrow.Render("→ ")+s.Primary.Render(label))
 		}
 		section("RELATED", strings.Join(lines, "\n"))
 	}
@@ -640,7 +703,7 @@ func (m Model) renderInspect() string {
 	if len(exposed) > 0 {
 		var lines []string
 		for _, r := range exposed {
-			line := "  → " + r.Source
+			line := "  " + s.Arrow.Render("→ ") + s.Primary.Render(r.Source)
 			if r.Label != "" {
 				line += "\n      " + s.Muted.Render(r.Label)
 			}
@@ -649,11 +712,11 @@ func (m Model) renderInspect() string {
 		section("EXPOSED THROUGH", strings.Join(lines, "\n"))
 	}
 
-	hints := []string{"esc back", "r refresh", "q quit"}
+	hints := []string{"esc:back", "r:refresh", "q:quit"}
 	if m.hasImpact(svc.ID) {
-		hints = []string{"esc back", "i impact", "r refresh", "q quit"}
+		hints = []string{"esc:back", "i:impact", "r:refresh", "q:quit"}
 	}
-	b.WriteString(m.renderFooter(hints))
+	b.WriteString(m.renderFooterHints(hints))
 	return b.String()
 }
 
@@ -666,12 +729,14 @@ func (m Model) renderImpact() string {
 		return b.String()
 	}
 
-	b.WriteString(s.Title.Render("IMPACT · " + svc.Name))
+	b.WriteString(s.TitleWTF.Render("IMPACT") + s.TitleRest.Render(" · "+svc.Name))
+	b.WriteString("\n")
+	b.WriteString(gradientRule(min(36, m.width-6), s))
 	b.WriteString("\n\n")
 	ports := formatPorts(svc.Ports)
 	b.WriteString(s.Primary.Render(svc.Name))
 	if ports != "" {
-		b.WriteString(s.Secondary.Render("  " + ports))
+		b.WriteString("  " + s.Port.Render(ports))
 	}
 	b.WriteString("\n\n")
 
@@ -679,10 +744,10 @@ func (m Model) renderImpact() string {
 	related := m.networkPeers(svc)
 
 	if len(usedBy) > 0 {
-		b.WriteString(s.Section.MarginTop(0).Render("USED BY"))
+		b.WriteString(s.Section.MarginTop(0).Render("◆ USED BY"))
 		b.WriteString("\n")
 		for _, r := range usedBy {
-			line := "  → " + r.Source
+			line := "  " + s.Arrow.Render("→ ") + s.Primary.Render(r.Source)
 			if r.Label != "" {
 				line += s.Muted.Render("  (" + r.Label + ")")
 			}
@@ -693,10 +758,10 @@ func (m Model) renderImpact() string {
 	}
 
 	if len(related) > 0 {
-		b.WriteString(s.Section.MarginTop(0).Render("SAME NETWORK"))
+		b.WriteString(s.Section.MarginTop(0).Render("◆ SAME NETWORK"))
 		b.WriteString("\n")
 		for _, name := range related {
-			b.WriteString("  → " + name + "\n")
+			b.WriteString("  " + s.Arrow.Render("→ ") + s.Primary.Render(name) + "\n")
 		}
 		b.WriteString("\n")
 	}
@@ -706,12 +771,19 @@ func (m Model) renderImpact() string {
 		b.WriteString("\n\n")
 	} else {
 		n := len(usedBy) + len(related)
-		b.WriteString(s.Muted.Render(fmt.Sprintf("%d services potentially affected", n)))
+		b.WriteString(s.MetricVal.Render(fmt.Sprintf("%d", n)) + s.Muted.Render(" services potentially affected"))
 		b.WriteString("\n\n")
 	}
 
-	b.WriteString(m.renderFooter([]string{"esc back", "q quit"}))
+	b.WriteString(m.renderFooterHints([]string{"esc:back", "q:quit"}))
 	return b.String()
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (m Model) outgoingFor(svc *model.Service) []model.Relation {
