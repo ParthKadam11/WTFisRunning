@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // Status represents the health/availability of a runtime entity.
 type Status string
@@ -39,40 +42,63 @@ const (
 	RelSameNetwork RelationType = "same_network"
 )
 
+// Exposure classifies how reachable a listening port is.
+type Exposure string
+
+const (
+	ExposurePublic  Exposure = "public"  // 0.0.0.0, ::, *
+	ExposureLocal   Exposure = "local"   // 127.0.0.1, ::1
+	ExposurePrivate Exposure = "private" // LAN / specific interface
+	ExposureUnknown Exposure = "unknown"
+)
+
 // Runtime is the complete discovered snapshot of a machine.
 type Runtime struct {
-	DiscoveredAt time.Time                  `json:"discovered_at"`
-	Host         string                     `json:"host,omitempty"`
-	System       SystemInfo                 `json:"system"`
-	Services     []Service                  `json:"services"`
-	Containers   []Container                `json:"containers"`
-	Processes    []Process                  `json:"processes"`
-	Ports        []Port                     `json:"ports"`
-	Networks     []Network                  `json:"networks"`
-	Relations    []Relation                 `json:"relations"`
-	Collectors   map[string]CollectorResult `json:"collectors"`
+	DiscoveredAt    time.Time                  `json:"discovered_at"`
+	Host            string                     `json:"host,omitempty"`
+	System          SystemInfo                 `json:"system"`
+	Services        []Service                  `json:"services"`
+	Containers      []Container                `json:"containers"`
+	Processes       []Process                  `json:"processes"`
+	Ports           []Port                     `json:"ports"`
+	Networks        []Network                  `json:"networks"`
+	Relations       []Relation                 `json:"relations"`
+	TLSCerts        []TLSCert                  `json:"tls_certs"`
+	ComposeProjects []ComposeProject           `json:"compose_projects"`
+	FailedUnits     []Service                  `json:"failed_units"`
+	Collectors      map[string]CollectorResult `json:"collectors"`
 }
 
 // SystemInfo holds basic host metrics.
 type SystemInfo struct {
-	Hostname    string  `json:"hostname"`
-	OS          string  `json:"os"`
-	Kernel      string  `json:"kernel,omitempty"`
-	Uptime      string  `json:"uptime"`
-	UptimeSec   int64   `json:"uptime_sec,omitempty"`
-	CPUPercent  float64 `json:"cpu_percent"`
-	MemUsedGB   float64 `json:"mem_used_gb"`
-	MemTotalGB  float64 `json:"mem_total_gb"`
-	DiskPercent float64 `json:"disk_percent"`
-	DiskUsedGB  float64 `json:"disk_used_gb,omitempty"`
-	DiskTotalGB float64 `json:"disk_total_gb,omitempty"`
+	Hostname    string      `json:"hostname"`
+	OS          string      `json:"os"`
+	Kernel      string      `json:"kernel,omitempty"`
+	Uptime      string      `json:"uptime"`
+	UptimeSec   int64       `json:"uptime_sec,omitempty"`
+	CPUPercent  float64     `json:"cpu_percent"`
+	MemUsedGB   float64     `json:"mem_used_gb"`
+	MemTotalGB  float64     `json:"mem_total_gb"`
+	DiskPercent float64     `json:"disk_percent"`
+	DiskUsedGB  float64     `json:"disk_used_gb,omitempty"`
+	DiskTotalGB float64     `json:"disk_total_gb,omitempty"`
+	Disks       []DiskMount `json:"disks,omitempty"`
+}
+
+// DiskMount is usage for one filesystem mount.
+type DiskMount struct {
+	Mount   string  `json:"mount"`
+	Device  string  `json:"device,omitempty"`
+	Percent float64 `json:"percent"`
+	UsedGB  float64 `json:"used_gb"`
+	TotalGB float64 `json:"total_gb"`
 }
 
 // Service is a logical runtime unit (container, systemd unit, or named process).
 type Service struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`
-	Kind        string   `json:"kind"` // container | systemd | process | nginx
+	Kind        string   `json:"kind"` // container | systemd | process | nginx | port
 	Status      Status   `json:"status"`
 	StatusText  string   `json:"status_text,omitempty"`
 	Ports       []int    `json:"ports,omitempty"`
@@ -82,6 +108,12 @@ type Service struct {
 	Image       string   `json:"image,omitempty"`
 	Networks    []string `json:"networks,omitempty"`
 	Detail      string   `json:"detail,omitempty"`
+	User        string   `json:"user,omitempty"`
+	Cmdline     string   `json:"cmdline,omitempty"`
+	Exposure    Exposure `json:"exposure,omitempty"`
+	ComposeProj string   `json:"compose_project,omitempty"`
+	ComposeSvc  string   `json:"compose_service,omitempty"`
+	Logs        []string `json:"logs,omitempty"`
 }
 
 // Container is a Docker container snapshot.
@@ -116,12 +148,15 @@ type Process struct {
 
 // Port is a listening socket.
 type Port struct {
-	Protocol  string `json:"protocol"`
-	Address   string `json:"address"`
-	Port      int    `json:"port"`
-	PID       int    `json:"pid,omitempty"`
-	Process   string `json:"process,omitempty"`
-	Userspace string `json:"userspace,omitempty"`
+	Protocol  string   `json:"protocol"`
+	Address   string   `json:"address"`
+	Port      int      `json:"port"`
+	PID       int      `json:"pid,omitempty"`
+	Process   string   `json:"process,omitempty"`
+	User      string   `json:"user,omitempty"`
+	Cmdline   string   `json:"cmdline,omitempty"`
+	Exposure  Exposure `json:"exposure,omitempty"`
+	Userspace string   `json:"userspace,omitempty"`
 }
 
 // Network is a Docker network.
@@ -130,6 +165,28 @@ type Network struct {
 	Name    string   `json:"name"`
 	Driver  string   `json:"driver,omitempty"`
 	Members []string `json:"members,omitempty"`
+}
+
+// TLSCert is a TLS certificate discovered on a listening port.
+type TLSCert struct {
+	Port       int       `json:"port"`
+	Address    string    `json:"address,omitempty"`
+	CN         string    `json:"cn,omitempty"`
+	SANs       []string  `json:"sans,omitempty"`
+	NotAfter   time.Time `json:"not_after,omitempty"`
+	ExpiresIn  string    `json:"expires_in,omitempty"`
+	Issuer     string    `json:"issuer,omitempty"`
+	Accessible bool      `json:"accessible"`
+	Error      string    `json:"error,omitempty"`
+}
+
+// ComposeProject groups containers from one docker compose project.
+type ComposeProject struct {
+	Name       string   `json:"name"`
+	Services   []string `json:"services"`
+	Containers []string `json:"containers"`
+	Running    int      `json:"running"`
+	Total      int      `json:"total"`
 }
 
 // Relation links two runtime entities with evidence.
@@ -152,14 +209,17 @@ type CollectorResult struct {
 // EmptyRuntime returns a zero-value runtime with initialized maps.
 func EmptyRuntime() *Runtime {
 	return &Runtime{
-		DiscoveredAt: time.Now().UTC(),
-		Collectors:   map[string]CollectorResult{},
-		Services:     []Service{},
-		Containers:   []Container{},
-		Processes:    []Process{},
-		Ports:        []Port{},
-		Networks:     []Network{},
-		Relations:    []Relation{},
+		DiscoveredAt:    time.Now().UTC(),
+		Collectors:      map[string]CollectorResult{},
+		Services:        []Service{},
+		Containers:      []Container{},
+		Processes:       []Process{},
+		Ports:           []Port{},
+		Networks:        []Network{},
+		Relations:       []Relation{},
+		TLSCerts:        []TLSCert{},
+		ComposeProjects: []ComposeProject{},
+		FailedUnits:     []Service{},
 	}
 }
 
@@ -183,6 +243,28 @@ func (r *Runtime) ServiceByName(name string) *Service {
 	return nil
 }
 
+// PortsForService returns ports matching a service name or listed ports.
+func (r *Runtime) PortsForService(svc *Service) []Port {
+	if svc == nil {
+		return nil
+	}
+	var out []Port
+	portSet := map[int]bool{}
+	for _, p := range svc.Ports {
+		portSet[p] = true
+	}
+	for _, p := range r.Ports {
+		if p.Process != "" && strings.EqualFold(p.Process, svc.Name) {
+			out = append(out, p)
+			continue
+		}
+		if portSet[p.Port] {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // DependentsOf returns services that depend on the given service (incoming relations).
 func (r *Runtime) DependentsOf(serviceID string) []Relation {
 	var out []Relation
@@ -194,7 +276,6 @@ func (r *Runtime) DependentsOf(serviceID string) []Relation {
 		if rel.Destination == serviceID || rel.Destination == svc.Name {
 			out = append(out, rel)
 		}
-		// Also match port-based destinations like "redis:6379"
 		if svc.Name != "" && (rel.Destination == svc.Name || hasPrefixName(rel.Destination, svc.Name)) {
 			if !containsRel(out, rel) {
 				out = append(out, rel)
