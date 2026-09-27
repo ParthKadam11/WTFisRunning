@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 220" role="img" aria-label="WTF IS RUNNING?">
+  <rect width="920" height="220" fill="#1A1A19"/>
+  <g transform="translate(36 46)">
+    <rect width="128" height="128" rx="28" fill="#242423"/>
+    <rect x="14" y="16" width="100" height="96" rx="14" fill="none" stroke="#2E86AB" stroke-width="4"/>
+    <circle cx="34" cy="36" r="4" fill="#F24236"/>
+    <circle cx="48" cy="36" r="4" fill="#F5F749"/>
+    <circle cx="62" cy="36" r="4" fill="#2E86AB"/>
+    <circle cx="42" cy="78" r="10" fill="#F24236"/>
+    <text x="78" y="90" text-anchor="middle" font-family="ui-sans-serif, Segoe UI, Helvetica, Arial, sans-serif" font-size="40" font-weight="700" fill="#F5F749">?</text>
+  </g>
+  <text x="196" y="108" font-family="ui-sans-serif, Segoe UI, Helvetica, Arial, sans-serif" font-size="64" font-weight="800" letter-spacing="1">
+    <tspan fill="#F24236">WTF</tspan>
+    <tspan fill="#F5F749"> IS RUNNING?</tspan>
+  </text>
+  <text x="198" y="152" font-family="ui-sans-serif, Segoe UI, Helvetica, Arial, sans-serif" font-size="22" fill="#2E86AB">runtime topology</text>
+</svg>

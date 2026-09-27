@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="wtfisrunning">
+  <rect width="128" height="128" rx="28" fill="#1A1A19"/>
+  <rect x="18" y="22" width="92" height="84" rx="14" fill="none" stroke="#2E86AB" stroke-width="4"/>
+  <circle cx="34" cy="38" r="4" fill="#F24236"/>
+  <circle cx="48" cy="38" r="4" fill="#F5F749"/>
+  <circle cx="62" cy="38" r="4" fill="#2E86AB"/>
+  <circle cx="42" cy="74" r="10" fill="#F24236"/>
+  <text x="78" y="86" text-anchor="middle" font-family="ui-sans-serif, Segoe UI, Helvetica, Arial, sans-serif" font-size="42" font-weight="700" fill="#F5F749">?</text>
+</svg>
