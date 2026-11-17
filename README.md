@@ -1,6 +1,6 @@
-# wtfisrunning
+# wtfisrunning TUI
 
-> See what the fuck is actually running on your Linux server.
+> See what is actually running on your Linux server.
 
 ```
 ┌─ WTF IS RUNNING? ────────────────────────────────────────────┐
